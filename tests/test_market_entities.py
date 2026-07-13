@@ -1,0 +1,231 @@
+from __future__ import annotations
+
+from unittest.mock import AsyncMock
+
+from homeassistant.helpers import device_registry as dr, entity_registry as er
+
+from custom_components.toss_invest.const import DOMAIN
+from custom_components.toss_invest.coordinator import KOREAN_MARKET_INDICATORS
+from custom_components.toss_invest.market_entities import (
+    TossInvestorNetSensor,
+    TossMarketIndicatorSensor,
+    TossRankingSensor,
+    build_market_entities,
+)
+
+from .test_sensor import api, setup_integration
+
+
+def market_api() -> AsyncMock:
+    client = api()
+    client.async_get_market_indicators.return_value = [
+        {
+            "symbol": symbol,
+            "timestamp": "2026-07-13T09:00:00+09:00",
+            "lastPrice": str(index + 100),
+        }
+        for index, symbol in enumerate(KOREAN_MARKET_INDICATORS)
+    ]
+    records = {
+        "records": [
+            {
+                "date": "2026-07-13",
+                "updatedAt": "2026-07-13T15:30:00+09:00",
+                "individual": {"buyAmount": "150", "sellAmount": "40"},
+                "foreigner": {"buyAmount": "20", "sellAmount": "70"},
+                "institution": {"buyAmount": "90", "sellAmount": "30"},
+                "otherCorporation": {"buyAmount": "10", "sellAmount": "3"},
+            },
+            {
+                "date": "2026-07-12",
+                "updatedAt": "2026-07-12T15:30:00+09:00",
+                "individual": {"buyAmount": "999", "sellAmount": "0"},
+                "foreigner": {"buyAmount": "0", "sellAmount": "0"},
+                "institution": {"buyAmount": "0", "sellAmount": "0"},
+                "otherCorporation": {"buyAmount": "0", "sellAmount": "0"},
+            },
+        ],
+        "nextUntil": None,
+    }
+    client.async_get_investor_trading.side_effect = lambda _symbol, **_kwargs: records
+    return client
+
+
+async def test_market_indicators_have_stable_values_defaults_and_device(hass) -> None:
+    entry = await setup_integration(hass, market_api())
+    registry = er.async_get(hass)
+
+    kospi = hass.states.get("sensor.toss_invest_portfolio_market_indicator_kospi")
+    kosdaq = hass.states.get("sensor.toss_invest_portfolio_market_indicator_kosdaq")
+    assert kospi is not None and kospi.state == "100"
+    assert kosdaq is not None and kosdaq.state == "101"
+
+    for index, symbol in enumerate(KOREAN_MARKET_INDICATORS):
+        entity_id = f"sensor.toss_invest_portfolio_market_indicator_{symbol.lower()}"
+        registry_entry = registry.async_get(entity_id)
+        assert registry_entry is not None
+        assert registry_entry.unique_id == (
+            f"{entry.entry_id}_portfolio_market_indicator_{symbol.lower()}"
+        )
+        if index < 2:
+            assert registry_entry.disabled_by is None
+        else:
+            assert registry_entry.disabled_by is er.RegistryEntryDisabler.INTEGRATION
+
+    portfolio = dr.async_get(hass).async_get_device(
+        identifiers={(DOMAIN, f"{entry.entry_id}:portfolio")}
+    )
+    assert portfolio is not None
+
+
+async def test_investor_net_uses_latest_record_decimal_and_krw_metadata(hass) -> None:
+    await setup_integration(hass, market_api())
+
+    expected = {
+        "individual": "110",
+        "foreigner": "-50",
+        "institution": "60",
+        "other_corporation": "7",
+    }
+    for market in ("kospi", "kosdaq"):
+        for investor, value in expected.items():
+            state = hass.states.get(f"sensor.toss_invest_portfolio_{market}_{investor}_net")
+            assert state is not None and state.state == value
+            assert state.attributes["device_class"] == "monetary"
+            assert state.attributes["unit_of_measurement"] == "KRW"
+
+
+async def test_market_entities_are_unavailable_only_for_market_context_staleness(hass) -> None:
+    entry = await setup_integration(hass, market_api())
+    entity_id = "sensor.toss_invest_portfolio_kospi_individual_net"
+
+    entry.runtime_data.stale_groups.add("market_context")
+    entry.runtime_data.market_context.async_update_listeners()
+    await hass.async_block_till_done()
+    assert hass.states.get(entity_id).state == "unavailable"
+    assert hass.states.get("sensor.toss_invest_portfolio_total_return").state != "unavailable"
+
+    entry.runtime_data.stale_groups.clear()
+    entry.runtime_data.market_context.async_update_listeners()
+    await hass.async_block_till_done()
+    assert hass.states.get(entity_id).state == "110"
+
+
+async def test_empty_and_unknown_market_data_report_unknown_without_crashing(hass) -> None:
+    client = market_api()
+    client.async_get_market_indicators.return_value = [
+        {"symbol": "UNEXPECTED", "timestamp": None, "lastPrice": "1"}
+    ]
+    client.async_get_investor_trading.return_value = {"records": [], "nextUntil": None}
+    client.async_get_investor_trading.side_effect = None
+    await setup_integration(hass, client)
+
+    assert hass.states.get("sensor.toss_invest_portfolio_market_indicator_kospi").state == "unknown"
+    assert hass.states.get("sensor.toss_invest_portfolio_kospi_individual_net").state == "unknown"
+
+
+async def test_ranking_entities_are_absent_when_option_is_disabled(hass) -> None:
+    entry = await setup_integration(hass, market_api())
+
+    entities = build_market_entities(entry)
+    assert (
+        len([entity for entity in entities if isinstance(entity, TossMarketIndicatorSensor)]) == 8
+    )
+    assert len([entity for entity in entities if isinstance(entity, TossInvestorNetSensor)]) == 8
+    assert not any(isinstance(entity, TossRankingSensor) for entity in entities)
+    registry = er.async_get(hass)
+    assert registry.async_get("sensor.toss_invest_portfolio_kr_top_gainers") is None
+
+
+async def test_rankings_are_option_gated_disabled_and_json_safe(hass) -> None:
+    client = market_api()
+    client.async_get_rankings.side_effect = lambda **kwargs: {
+        "rankedAt": "2026-07-13T15:30:00+09:00",
+        "rankings": [
+            {
+                "rank": rank,
+                "symbol": f"{kwargs['market_country']}{rank}",
+                "currency": "KRW" if kwargs["market_country"] == "KR" else "USD",
+                "price": {
+                    "lastPrice": f"{100 + rank}.25",
+                    "basePrice": "100",
+                    "changeRate": "0.0125",
+                },
+                "tradingVolume": "1234.5",
+                "tradingAmount": "987654.25",
+            }
+            for rank in range(1, 12)
+        ],
+    }
+    entry = await setup_integration(hass, client, {"enable_rankings": True})
+    registry = er.async_get(hass)
+    expected_ids = {
+        "sensor.toss_invest_portfolio_kr_market_trading_amount",
+        "sensor.toss_invest_portfolio_kr_top_gainers",
+        "sensor.toss_invest_portfolio_kr_top_losers",
+        "sensor.toss_invest_portfolio_us_market_trading_amount",
+        "sensor.toss_invest_portfolio_us_top_gainers",
+        "sensor.toss_invest_portfolio_us_top_losers",
+    }
+    entities = [
+        entity for entity in build_market_entities(entry) if isinstance(entity, TossRankingSensor)
+    ]
+    assert len(entities) == 6
+    assert {entity.entity_id for entity in entities} == {None}
+
+    for entity_id in expected_ids:
+        registry_entry = registry.async_get(entity_id)
+        assert registry_entry is not None
+        assert registry_entry.disabled_by is er.RegistryEntryDisabler.INTEGRATION
+
+    ranking = next(
+        entity for entity in entities if entity.entity_description.key == "kr_top_gainers"
+    )
+    assert ranking.native_value == "KR1"
+    assert ranking.extra_state_attributes == {
+        "ranked_at": "2026-07-13T15:30:00+09:00",
+        "rankings": [
+            {
+                "rank": rank,
+                "symbol": f"KR{rank}",
+                "currency": "KRW",
+                "last_price": f"{100 + rank}.25",
+                "base_price": "100",
+                "change_rate": "0.0125",
+                "trading_volume": "1234.5",
+                "trading_amount": "987654.25",
+            }
+            for rank in range(1, 11)
+        ],
+    }
+    assert "rankings" in ranking._unrecorded_attributes
+    assert all(
+        isinstance(value, (str, int))
+        for row in ranking.extra_state_attributes["rankings"]
+        for value in row.values()
+    )
+    entry.runtime_data.stale_groups.add("rankings")
+    assert ranking.available is False
+    assert (
+        next(
+            entity
+            for entity in build_market_entities(entry)
+            if isinstance(entity, TossMarketIndicatorSensor)
+        ).available
+        is True
+    )
+
+
+async def test_empty_ranking_has_unknown_state_and_ranked_at(hass) -> None:
+    client = market_api()
+    client.async_get_rankings.return_value = {
+        "rankedAt": None,
+        "rankings": [],
+    }
+    entry = await setup_integration(hass, client, {"enable_rankings": True})
+    ranking = next(
+        entity for entity in build_market_entities(entry) if isinstance(entity, TossRankingSensor)
+    )
+
+    assert ranking.native_value is None
+    assert ranking.extra_state_attributes == {"ranked_at": None, "rankings": []}

@@ -27,6 +27,7 @@ from .calculations import (
 )
 from .coordinator import TossInvestRuntimeData
 from .entity import TossInvestEntity
+from .market_entities import build_market_entities
 from .models import Candle, Holding, HoldingsOverview
 
 type Value = Decimal | str | datetime | int | None
@@ -354,6 +355,7 @@ async def async_setup_entry(
         for description in ACCOUNT_DESCRIPTIONS
         if buying_power_enabled or not description.key.startswith("buying_power_")
     )
+    async_add_entities(build_market_entities(entry))
     known_symbols: set[str] = set()
 
     def reconcile_holdings() -> None:
