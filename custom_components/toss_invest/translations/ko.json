@@ -41,7 +41,7 @@
     "step": {
       "init": {
         "title": "Toss Invest 옵션",
-        "description": "새로고침 주기, 선택적 데이터, 대시보드 색상, 개인정보 보호, 알림 임계값을 설정하세요. 모든 숫자 옵션은 안전한 범위로 제한됩니다.",
+        "description": "새로고침 주기, 선택적 데이터, 알림 임계값을 설정하세요. 모든 숫자 옵션은 안전한 범위로 제한됩니다.",
         "data": {
           "open_price_interval": "장중 시세 새로고침 주기",
           "holdings_interval": "보유 종목 새로고침 주기",
@@ -51,15 +51,8 @@
           "max_retries": "최대 재시도 횟수",
           "request_timeout": "요청 제한시간",
           "enable_manual_refresh": "수동 새로고침 버튼 사용",
-          "enable_krw_conversion": "원화(KRW) 환산 사용",
           "enable_buying_power": "매수 가능 금액 데이터 사용",
           "enable_rankings": "시장 순위 데이터 사용",
-          "gain_color": "상승 색상",
-          "loss_color": "하락 색상",
-          "neutral_color": "보합 색상",
-          "border_color": "테두리 색상",
-          "glow_color": "발광 색상",
-          "include_monetary_alert_payloads": "알림 이벤트에 금액 포함",
           "alert_cooldown": "알림 반복 대기시간",
           "stock_warning_alerts_enabled": "종목 경고 알림 사용",
           "stale_data_alerts_enabled": "데이터 지연 알림 사용",

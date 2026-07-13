@@ -15,7 +15,6 @@ from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
     BooleanSelector,
-    ColorRGBSelector,
     NumberSelector,
     NumberSelectorConfig,
     NumberSelectorMode,
@@ -40,15 +39,8 @@ CONF_CANDLE_LOOKBACK = "candle_lookback"
 CONF_MAX_RETRIES = "max_retries"
 CONF_REQUEST_TIMEOUT = "request_timeout"
 CONF_ENABLE_MANUAL_REFRESH = "enable_manual_refresh"
-CONF_ENABLE_KRW_CONVERSION = "enable_krw_conversion"
 CONF_ENABLE_BUYING_POWER = "enable_buying_power"
 CONF_ENABLE_RANKINGS = "enable_rankings"
-CONF_GAIN_COLOR = "gain_color"
-CONF_LOSS_COLOR = "loss_color"
-CONF_NEUTRAL_COLOR = "neutral_color"
-CONF_BORDER_COLOR = "border_color"
-CONF_GLOW_COLOR = "glow_color"
-CONF_INCLUDE_MONETARY_ALERT_PAYLOADS = "include_monetary_alert_payloads"
 CONF_ALERT_COOLDOWN = "alert_cooldown"
 CONF_DAILY_MOVE_THRESHOLD = "daily_move_threshold"
 CONF_TOTAL_RETURN_THRESHOLD = "total_return_threshold"
@@ -69,11 +61,6 @@ DEFAULT_CANDLE_LOOKBACK = 252
 DEFAULT_MAX_RETRIES = 3
 DEFAULT_REQUEST_TIMEOUT = 10
 DEFAULT_ALERT_COOLDOWN = 3600
-DEFAULT_GAIN_COLOR = [211, 47, 47]
-DEFAULT_LOSS_COLOR = [25, 118, 210]
-DEFAULT_NEUTRAL_COLOR = [158, 158, 158]
-DEFAULT_BORDER_COLOR = [158, 158, 158]
-DEFAULT_GLOW_COLOR = [255, 193, 7]
 
 _THRESHOLD_KEYS = (
     CONF_DAILY_MOVE_THRESHOLD,
@@ -305,35 +292,12 @@ def _options_schema(current: Mapping[str, Any]) -> vol.Schema:
             default=get(CONF_ENABLE_MANUAL_REFRESH, True),
         ): BooleanSelector(),
         vol.Optional(
-            CONF_ENABLE_KRW_CONVERSION,
-            default=get(CONF_ENABLE_KRW_CONVERSION, True),
-        ): BooleanSelector(),
-        vol.Optional(
             CONF_ENABLE_BUYING_POWER,
             default=get(CONF_ENABLE_BUYING_POWER, False),
         ): BooleanSelector(),
         vol.Optional(
             CONF_ENABLE_RANKINGS,
             default=get(CONF_ENABLE_RANKINGS, False),
-        ): BooleanSelector(),
-        vol.Optional(
-            CONF_GAIN_COLOR, default=get(CONF_GAIN_COLOR, DEFAULT_GAIN_COLOR)
-        ): ColorRGBSelector(),
-        vol.Optional(
-            CONF_LOSS_COLOR, default=get(CONF_LOSS_COLOR, DEFAULT_LOSS_COLOR)
-        ): ColorRGBSelector(),
-        vol.Optional(
-            CONF_NEUTRAL_COLOR, default=get(CONF_NEUTRAL_COLOR, DEFAULT_NEUTRAL_COLOR)
-        ): ColorRGBSelector(),
-        vol.Optional(
-            CONF_BORDER_COLOR, default=get(CONF_BORDER_COLOR, DEFAULT_BORDER_COLOR)
-        ): ColorRGBSelector(),
-        vol.Optional(
-            CONF_GLOW_COLOR, default=get(CONF_GLOW_COLOR, DEFAULT_GLOW_COLOR)
-        ): ColorRGBSelector(),
-        vol.Optional(
-            CONF_INCLUDE_MONETARY_ALERT_PAYLOADS,
-            default=get(CONF_INCLUDE_MONETARY_ALERT_PAYLOADS, False),
         ): BooleanSelector(),
         vol.Optional(
             CONF_ALERT_COOLDOWN,

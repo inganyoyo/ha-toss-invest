@@ -21,9 +21,7 @@ from custom_components.toss_invest.config_flow import (
     CONF_ACCOUNT_SEQ,
     CONF_ALERT_COOLDOWN,
     CONF_DAILY_MOVE_THRESHOLD,
-    CONF_ENABLE_KRW_CONVERSION,
     CONF_ENABLE_MANUAL_REFRESH,
-    CONF_GAIN_COLOR,
     CONF_HOLDINGS_INTERVAL,
     CONF_OPEN_PRICE_INTERVAL,
     _account_label,
@@ -33,6 +31,30 @@ from custom_components.toss_invest.const import DOMAIN
 from homeassistant.const import CONF_CLIENT_ID, CONF_CLIENT_SECRET
 
 INTEGRATION_DIR = pathlib.Path("custom_components/toss_invest")
+
+REMAINING_OPTION_KEYS = {
+    "open_price_interval",
+    "holdings_interval",
+    "closed_price_interval",
+    "reference_interval",
+    "candle_lookback",
+    "max_retries",
+    "request_timeout",
+    "enable_manual_refresh",
+    "enable_buying_power",
+    "enable_rankings",
+    "alert_cooldown",
+    "stock_warning_alerts_enabled",
+    "stale_data_alerts_enabled",
+    "api_failure_alerts_enabled",
+    "daily_move_threshold",
+    "total_return_threshold",
+    "portfolio_daily_threshold",
+    "near_high_threshold",
+    "near_low_threshold",
+    "drawdown_threshold",
+    "volume_spike_threshold",
+}
 
 # Realistic-shaped fixture data: `accountSeq` is the short numeric identifier
 # the Toss API expects in the `X-Tossinvest-Account` header and is what this
@@ -431,20 +453,24 @@ async def test_options_flow_shows_bounded_defaults(hass: Any) -> None:
     assert open_price_selector.config["max"] == 300
 
 
-async def test_options_flow_manual_refresh_and_krw_conversion_default_on(hass: Any) -> None:
+async def test_options_flow_exposes_exact_functional_option_keys(hass: Any) -> None:
+    entry = _existing_entry(hass)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    schema = result["data_schema"].schema
+
+    assert {str(key) for key in schema} == REMAINING_OPTION_KEYS
+
+
+async def test_options_flow_manual_refresh_defaults_on(hass: Any) -> None:
     entry = _existing_entry(hass)
     result = await hass.config_entries.options.async_init(entry.entry_id)
     schema = result["data_schema"].schema
 
     manual_refresh_key = next(key for key in schema if str(key) == CONF_ENABLE_MANUAL_REFRESH)
-    krw_conversion_key = next(key for key in schema if str(key) == CONF_ENABLE_KRW_CONVERSION)
     assert manual_refresh_key.default() is True
-    assert krw_conversion_key.default() is True
 
     manual_refresh_selector = schema[manual_refresh_key]
-    krw_conversion_selector = schema[krw_conversion_key]
     assert isinstance(manual_refresh_selector, selector.BooleanSelector)
-    assert isinstance(krw_conversion_selector, selector.BooleanSelector)
 
 
 async def test_options_flow_all_fields_have_defaults_when_omitted(hass: Any) -> None:
@@ -456,24 +482,20 @@ async def test_options_flow_all_fields_have_defaults_when_omitted(hass: Any) -> 
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][CONF_OPEN_PRICE_INTERVAL] == 30
     assert result["data"][CONF_ENABLE_MANUAL_REFRESH] is True
-    assert result["data"][CONF_ENABLE_KRW_CONVERSION] is True
     assert result["data"]["enable_buying_power"] is False
     assert result["data"]["enable_rankings"] is False
     assert result["data"][CONF_DAILY_MOVE_THRESHOLD] is None
 
 
-async def test_options_flow_persists_manual_refresh_and_krw_conversion_choices(
-    hass: Any,
-) -> None:
+async def test_options_flow_persists_manual_refresh_choice(hass: Any) -> None:
     entry = _existing_entry(hass)
     result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        {CONF_ENABLE_MANUAL_REFRESH: False, CONF_ENABLE_KRW_CONVERSION: False},
+        {CONF_ENABLE_MANUAL_REFRESH: False},
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert entry.options[CONF_ENABLE_MANUAL_REFRESH] is False
-    assert entry.options[CONF_ENABLE_KRW_CONVERSION] is False
 
     # Re-opening the form must reflect the persisted (non-default) choice.
     result = await hass.config_entries.options.async_init(entry.entry_id)
@@ -496,15 +518,8 @@ async def test_options_flow_creates_entry_with_defaults(hass: Any) -> None:
             "max_retries": 3,
             "request_timeout": 10,
             CONF_ENABLE_MANUAL_REFRESH: True,
-            CONF_ENABLE_KRW_CONVERSION: True,
             "enable_buying_power": False,
             "enable_rankings": False,
-            CONF_GAIN_COLOR: [211, 47, 47],
-            "loss_color": [25, 118, 210],
-            "neutral_color": [158, 158, 158],
-            "border_color": [158, 158, 158],
-            "glow_color": [255, 193, 7],
-            "include_monetary_alert_payloads": False,
             CONF_ALERT_COOLDOWN: 3600,
             "stock_warning_alerts_enabled": True,
             "stale_data_alerts_enabled": True,
@@ -571,26 +586,6 @@ async def test_options_flow_rejects_out_of_range_interval(hass: Any) -> None:
     assert entry.options == {}
 
 
-async def test_options_flow_rejects_invalid_color(hass: Any) -> None:
-    entry = _existing_entry(hass)
-    result = await hass.config_entries.options.async_init(entry.entry_id)
-    with pytest.raises(InvalidData) as excinfo:
-        await hass.config_entries.options.async_configure(
-            result["flow_id"],
-            {
-                CONF_OPEN_PRICE_INTERVAL: 30,
-                CONF_HOLDINGS_INTERVAL: 300,
-                "closed_price_interval": 600,
-                "reference_interval": 1800,
-                "candle_lookback": 252,
-                "max_retries": 3,
-                "request_timeout": 10,
-                CONF_GAIN_COLOR: [999, 0, 0],
-            },
-        )
-    assert CONF_GAIN_COLOR in excinfo.value.schema_errors
-
-
 async def test_options_flow_clears_threshold_when_left_blank(hass: Any) -> None:
     entry = _existing_entry(hass)
     hass.config_entries.async_update_entry(entry, options={CONF_DAILY_MOVE_THRESHOLD: 5.0})
@@ -655,6 +650,15 @@ def test_translation_files_share_identical_keys() -> None:
     strings_keys = _flatten_keys(strings)
     assert strings_keys == _flatten_keys(en)
     assert strings_keys == _flatten_keys(ko)
+
+
+@pytest.mark.parametrize(
+    "filename",
+    ["strings.json", "translations/en.json", "translations/ko.json"],
+)
+def test_option_translations_match_exact_functional_schema(filename: str) -> None:
+    catalog = json.loads((INTEGRATION_DIR / filename).read_text())
+    assert set(catalog["options"]["step"]["init"]["data"]) == REMAINING_OPTION_KEYS
 
 
 def test_translations_cover_all_error_and_abort_codes_used_by_the_flow() -> None:
