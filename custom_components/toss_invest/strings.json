@@ -28,7 +28,8 @@
     "error": {
       "invalid_auth": "The client ID or client secret was rejected.",
       "cannot_connect": "Could not reach the Toss Securities API. This is usually temporary.",
-      "no_accounts": "No accounts were found for these credentials."
+      "no_accounts": "No accounts were found for these credentials.",
+      "account_not_found": "The account configured for this entry was not found for these credentials."
     },
     "abort": {
       "already_configured": "This account is already configured.",
@@ -49,6 +50,8 @@
           "candle_lookback": "Daily candle lookback (trading days)",
           "max_retries": "Maximum retry count",
           "request_timeout": "Request timeout",
+          "enable_manual_refresh": "Enable manual refresh button",
+          "enable_krw_conversion": "Enable KRW conversion",
           "enable_buying_power": "Enable buying power data",
           "enable_rankings": "Enable market rankings data",
           "gain_color": "Gain color",

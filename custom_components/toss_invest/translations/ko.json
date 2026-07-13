@@ -28,7 +28,8 @@
     "error": {
       "invalid_auth": "클라이언트 ID 또는 클라이언트 시크릿이 거부되었습니다.",
       "cannot_connect": "토스증권 API에 연결할 수 없습니다. 대부분 일시적인 문제입니다.",
-      "no_accounts": "이 인증 정보로 조회되는 계좌가 없습니다."
+      "no_accounts": "이 인증 정보로 조회되는 계좌가 없습니다.",
+      "account_not_found": "이 항목에 설정된 계좌를 이 인증 정보로는 찾을 수 없습니다."
     },
     "abort": {
       "already_configured": "이 계좌는 이미 설정되어 있습니다.",
@@ -49,6 +50,8 @@
           "candle_lookback": "일봉 조회 기간(거래일)",
           "max_retries": "최대 재시도 횟수",
           "request_timeout": "요청 제한시간",
+          "enable_manual_refresh": "수동 새로고침 버튼 사용",
+          "enable_krw_conversion": "원화(KRW) 환산 사용",
           "enable_buying_power": "매수 가능 금액 데이터 사용",
           "enable_rankings": "시장 순위 데이터 사용",
           "gain_color": "상승 색상",

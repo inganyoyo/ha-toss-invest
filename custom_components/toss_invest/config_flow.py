@@ -39,6 +39,8 @@ CONF_REFERENCE_INTERVAL = "reference_interval"
 CONF_CANDLE_LOOKBACK = "candle_lookback"
 CONF_MAX_RETRIES = "max_retries"
 CONF_REQUEST_TIMEOUT = "request_timeout"
+CONF_ENABLE_MANUAL_REFRESH = "enable_manual_refresh"
+CONF_ENABLE_KRW_CONVERSION = "enable_krw_conversion"
 CONF_ENABLE_BUYING_POWER = "enable_buying_power"
 CONF_ENABLE_RANKINGS = "enable_rankings"
 CONF_GAIN_COLOR = "gain_color"
@@ -95,16 +97,29 @@ def _credentials_schema(*, client_id: str | None = None) -> vol.Schema:
     )
 
 
+def _mask_account_no(account_no: str) -> str:
+    """Mask a display-only account number, never revealing it in full.
+
+    At most the last 4 characters are shown, and at least one leading
+    character is always hidden — including for malformed or very short
+    account numbers — so a full identifier can never leak into the UI,
+    the config entry title, or a fixture/log capture.
+    """
+    visible = min(4, max(len(account_no) - 1, 0))
+    if visible == 0:
+        return "••••"
+    return f"••••{account_no[-visible:]}"
+
+
 def _account_label(account: Mapping[str, Any]) -> str:
     account_no = str(account["accountNo"])
     account_type = str(account.get("accountType", ""))
-    masked = f"••••{account_no[-4:]}" if len(account_no) >= 4 else account_no
-    return f"{account_type} {masked}".strip()
+    return f"{account_type} {_mask_account_no(account_no)}".strip()
 
 
 def _account_options(accounts: list[dict[str, Any]]) -> list[SelectOptionDict]:
     return [
-        SelectOptionDict(value=str(account["accountNo"]), label=_account_label(account))
+        SelectOptionDict(value=str(account["accountSeq"]), label=_account_label(account))
         for account in accounts
     ]
 
@@ -117,6 +132,10 @@ def _account_schema(accounts: list[dict[str, Any]]) -> vol.Schema:
             )
         }
     )
+
+
+def _find_account(accounts: list[dict[str, Any]], account_seq: str) -> dict[str, Any] | None:
+    return next((a for a in accounts if str(a["accountSeq"]) == account_seq), None)
 
 
 def _compute_unique_id(client_id: str, account_seq: str) -> str:
@@ -180,10 +199,10 @@ class TossInvestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             unique_id = _compute_unique_id(self._credentials[CONF_CLIENT_ID], account_seq)
             await self.async_set_unique_id(unique_id)
             self._abort_if_unique_id_configured()
+            account = _find_account(self._accounts, account_seq)
+            assert account is not None
             return self.async_create_entry(
-                title=_account_label(
-                    next(a for a in self._accounts if str(a["accountNo"]) == account_seq)
-                ),
+                title=_account_label(account),
                 data={**self._credentials, CONF_ACCOUNT_SEQ: account_seq},
             )
 
@@ -204,21 +223,25 @@ class TossInvestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             client_id = user_input[CONF_CLIENT_ID]
             client_secret = user_input[CONF_CLIENT_SECRET]
-            _, error = await self._async_validate_and_fetch_accounts(client_id, client_secret)
+            accounts, error = await self._async_validate_and_fetch_accounts(
+                client_id, client_secret
+            )
             if error is None:
                 account_seq = self._reauth_account_seq
                 assert account_seq is not None
-                unique_id = _compute_unique_id(client_id, account_seq)
-                await self.async_set_unique_id(unique_id)
-                self._abort_if_unique_id_mismatch()
-                return self.async_update_reload_and_abort(
-                    reauth_entry,
-                    data={
-                        CONF_CLIENT_ID: client_id,
-                        CONF_CLIENT_SECRET: client_secret,
-                        CONF_ACCOUNT_SEQ: account_seq,
-                    },
-                )
+                if _find_account(accounts, account_seq) is not None:
+                    unique_id = _compute_unique_id(client_id, account_seq)
+                    await self.async_set_unique_id(unique_id)
+                    self._abort_if_unique_id_mismatch()
+                    return self.async_update_reload_and_abort(
+                        reauth_entry,
+                        data={
+                            CONF_CLIENT_ID: client_id,
+                            CONF_CLIENT_SECRET: client_secret,
+                            CONF_ACCOUNT_SEQ: account_seq,
+                        },
+                    )
+                error = "account_not_found"
             errors["base"] = error
 
         return self.async_show_form(
@@ -277,6 +300,14 @@ def _options_schema(current: Mapping[str, Any]) -> vol.Schema:
             CONF_REQUEST_TIMEOUT,
             default=get(CONF_REQUEST_TIMEOUT, DEFAULT_REQUEST_TIMEOUT),
         ): _bounded_number(min_value=5, max_value=60, unit="s"),
+        vol.Optional(
+            CONF_ENABLE_MANUAL_REFRESH,
+            default=get(CONF_ENABLE_MANUAL_REFRESH, True),
+        ): BooleanSelector(),
+        vol.Optional(
+            CONF_ENABLE_KRW_CONVERSION,
+            default=get(CONF_ENABLE_KRW_CONVERSION, True),
+        ): BooleanSelector(),
         vol.Optional(
             CONF_ENABLE_BUYING_POWER,
             default=get(CONF_ENABLE_BUYING_POWER, False),

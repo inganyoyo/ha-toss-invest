@@ -21,9 +21,12 @@ from custom_components.toss_invest.config_flow import (
     CONF_ACCOUNT_SEQ,
     CONF_ALERT_COOLDOWN,
     CONF_DAILY_MOVE_THRESHOLD,
+    CONF_ENABLE_KRW_CONVERSION,
+    CONF_ENABLE_MANUAL_REFRESH,
     CONF_GAIN_COLOR,
     CONF_HOLDINGS_INTERVAL,
     CONF_OPEN_PRICE_INTERVAL,
+    _account_label,
     _compute_unique_id,
 )
 from custom_components.toss_invest.const import DOMAIN
@@ -31,10 +34,16 @@ from homeassistant.const import CONF_CLIENT_ID, CONF_CLIENT_SECRET
 
 INTEGRATION_DIR = pathlib.Path("custom_components/toss_invest")
 
+# Realistic-shaped fixture data: `accountSeq` is the short numeric identifier
+# the Toss API expects in the `X-Tossinvest-Account` header and is what this
+# flow stores/selects on. `accountNo` is a longer display-only account number
+# that must only ever appear masked in labels/titles.
 SANITIZED_ACCOUNTS = [
-    {"accountNo": "sanitized-account", "accountType": "BROKERAGE"},
-    {"accountNo": "sanitized-account-2", "accountType": "BROKERAGE"},
+    {"accountSeq": "1001", "accountNo": "1234567890123", "accountType": "BROKERAGE"},
+    {"accountSeq": "1002", "accountNo": "2345678901234", "accountType": "BROKERAGE"},
 ]
+PRIMARY_ACCOUNT_SEQ = "1001"
+SECONDARY_ACCOUNT_SEQ = "1002"
 
 # An unrelated worktree's editable install of this same package registers a meta
 # path finder that injects a non-existent placeholder into `sys.path` and into
@@ -85,14 +94,14 @@ def patched_client() -> Generator[Any, None, None]:
 
 
 def _existing_entry(hass: Any) -> MockConfigEntry:
-    unique_id = _compute_unique_id("public-id", "sanitized-account")
+    unique_id = _compute_unique_id("public-id", PRIMARY_ACCOUNT_SEQ)
     entry = MockConfigEntry(
         domain=DOMAIN,
         unique_id=unique_id,
         data={
             CONF_CLIENT_ID: "public-id",
             CONF_CLIENT_SECRET: "fake-secret",
-            CONF_ACCOUNT_SEQ: "sanitized-account",
+            CONF_ACCOUNT_SEQ: PRIMARY_ACCOUNT_SEQ,
         },
         options={},
     )
@@ -112,15 +121,17 @@ async def test_user_flow_selects_account(hass: Any, mock_client: AsyncMock) -> N
     )
     assert result["step_id"] == "account"
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {"account_seq": "sanitized-account"}
+        result["flow_id"], {"account_seq": PRIMARY_ACCOUNT_SEQ}
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["data"]["account_seq"] == "sanitized-account"
+    assert result["data"]["account_seq"] == PRIMARY_ACCOUNT_SEQ
     assert result["data"]["client_id"] == "public-id"
     assert result["data"]["client_secret"] == "fake-secret"
+    # The long display-only account number is never persisted in the entry.
+    assert "1234567890123" not in str(result["data"])
 
     entry = hass.config_entries.async_entries(DOMAIN)[0]
-    assert entry.unique_id == _compute_unique_id("public-id", "sanitized-account")
+    assert entry.unique_id == _compute_unique_id("public-id", PRIMARY_ACCOUNT_SEQ)
 
 
 async def test_secret_field_uses_password_selector(hass: Any) -> None:
@@ -142,13 +153,36 @@ async def test_account_step_uses_select_selector_with_masked_labels(
     account_selector = next(value for key, value in schema.items() if str(key) == CONF_ACCOUNT_SEQ)
     assert isinstance(account_selector, selector.SelectSelector)
     options = cast("list[selector.SelectOptionDict]", account_selector.config["options"])
-    assert options[0]["value"] == "sanitized-account"
-    assert "sanitized-account" not in options[0]["label"]
-    assert options[0]["label"].endswith("ount")  # last 4 chars of accountNo
+    # The Select option value is the short accountSeq, not the long accountNo.
+    assert options[0]["value"] == PRIMARY_ACCOUNT_SEQ
+    # The long display-only account number never appears anywhere in the label.
+    assert "1234567890123" not in options[0]["label"]
+    assert options[0]["label"].endswith("0123")  # masked: last 4 chars of accountNo
 
 
-async def test_account_label_masks_short_account_numbers(hass: Any) -> None:
-    short_client = _make_mock_client(accounts=[{"accountNo": "12", "accountType": "CMA"}])
+@pytest.mark.parametrize(
+    ("account_no", "expected_masked"),
+    [
+        ("1234567890123", "••••0123"),  # typical 13-digit account number
+        ("12", "••••2"),  # short: still hides at least 1 character
+        ("1", "••••"),  # single character: fully hidden
+        ("", "••••"),  # empty: fully hidden, never crashes
+    ],
+)
+def test_mask_account_no_never_exposes_the_full_number(
+    account_no: str, expected_masked: str
+) -> None:
+    label = _account_label({"accountNo": account_no, "accountType": "CMA"})
+    assert label == f"CMA {expected_masked}"
+    # However short or malformed, the raw account number is never fully visible.
+    if account_no:
+        assert account_no not in label
+
+
+async def test_account_label_masks_short_account_numbers_end_to_end(hass: Any) -> None:
+    short_client = _make_mock_client(
+        accounts=[{"accountSeq": "7", "accountNo": "12", "accountType": "CMA"}]
+    )
     with patch(
         "custom_components.toss_invest.config_flow.TossInvestClient",
         return_value=short_client,
@@ -158,10 +192,12 @@ async def test_account_label_masks_short_account_numbers(hass: Any) -> None:
             result["flow_id"], {"client_id": "public-id", "client_secret": "fake-secret"}
         )
         result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], {"account_seq": "12"}
+            result["flow_id"], {"account_seq": "7"}
         )
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["title"] == "CMA 12"
+    assert result["title"] == "CMA ••••2"
+    assert "12" not in result["title"]
+    assert result["data"]["account_seq"] == "7"
 
 
 # ---------------------------------------------------------------------------
@@ -220,7 +256,7 @@ async def test_duplicate_account_aborts_already_configured(
         result["flow_id"], {"client_id": "public-id", "client_secret": "fake-secret"}
     )
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {"account_seq": "sanitized-account"}
+        result["flow_id"], {"account_seq": PRIMARY_ACCOUNT_SEQ}
     )
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "already_configured"
@@ -236,7 +272,7 @@ async def test_different_account_on_same_credentials_is_not_a_duplicate(
         result["flow_id"], {"client_id": "public-id", "client_secret": "fake-secret"}
     )
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {"account_seq": "sanitized-account-2"}
+        result["flow_id"], {"account_seq": SECONDARY_ACCOUNT_SEQ}
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
 
@@ -271,7 +307,7 @@ async def test_reauth_flow_preserves_unique_id_and_reloads(
     assert result["reason"] == "reauth_successful"
     assert entry.unique_id == original_unique_id
     assert entry.data[CONF_CLIENT_SECRET] == "new-secret"
-    assert entry.data[CONF_ACCOUNT_SEQ] == "sanitized-account"
+    assert entry.data[CONF_ACCOUNT_SEQ] == PRIMARY_ACCOUNT_SEQ
 
 
 async def test_reauth_flow_prefills_client_id(hass: Any) -> None:
@@ -341,6 +377,42 @@ async def test_reauth_flow_unique_id_mismatch_aborts(hass: Any, mock_client: Asy
     assert entry.data[CONF_CLIENT_ID] == "public-id"
 
 
+async def test_reauth_flow_account_not_found_shows_error(hass: Any) -> None:
+    """The previously configured account must still exist for the new credentials.
+
+    Without this check, entering valid credentials for a *different* Toss
+    account (or a client whose account was closed/removed) would silently
+    succeed and only fail later during coordinator refreshes.
+    """
+    entry = _existing_entry(hass)
+    other_account_client = _make_mock_client(
+        accounts=[{"accountSeq": "9999", "accountNo": "9999999999999", "accountType": "CMA"}]
+    )
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={
+            "source": config_entries.SOURCE_REAUTH,
+            "entry_id": entry.entry_id,
+            "unique_id": entry.unique_id,
+        },
+        data=entry.data,
+    )
+    with patch(
+        "custom_components.toss_invest.config_flow.TossInvestClient",
+        return_value=other_account_client,
+    ):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {"client_id": "public-id", "client_secret": "new-secret"},
+        )
+    assert result["step_id"] == "reauth_confirm"
+    assert result["errors"] == {"base": "account_not_found"}
+    # The entry must not be updated when the configured account cannot be verified.
+    assert entry.data[CONF_CLIENT_SECRET] == "fake-secret"
+    assert entry.data[CONF_ACCOUNT_SEQ] == PRIMARY_ACCOUNT_SEQ
+
+
 # ---------------------------------------------------------------------------
 # Options flow
 # ---------------------------------------------------------------------------
@@ -359,6 +431,57 @@ async def test_options_flow_shows_bounded_defaults(hass: Any) -> None:
     assert open_price_selector.config["max"] == 300
 
 
+async def test_options_flow_manual_refresh_and_krw_conversion_default_on(hass: Any) -> None:
+    entry = _existing_entry(hass)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    schema = result["data_schema"].schema
+
+    manual_refresh_key = next(key for key in schema if str(key) == CONF_ENABLE_MANUAL_REFRESH)
+    krw_conversion_key = next(key for key in schema if str(key) == CONF_ENABLE_KRW_CONVERSION)
+    assert manual_refresh_key.default() is True
+    assert krw_conversion_key.default() is True
+
+    manual_refresh_selector = schema[manual_refresh_key]
+    krw_conversion_selector = schema[krw_conversion_key]
+    assert isinstance(manual_refresh_selector, selector.BooleanSelector)
+    assert isinstance(krw_conversion_selector, selector.BooleanSelector)
+
+
+async def test_options_flow_all_fields_have_defaults_when_omitted(hass: Any) -> None:
+    """An empty submission must be valid; every option is Optional with a default."""
+    entry = _existing_entry(hass)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(result["flow_id"], {})
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_OPEN_PRICE_INTERVAL] == 30
+    assert result["data"][CONF_ENABLE_MANUAL_REFRESH] is True
+    assert result["data"][CONF_ENABLE_KRW_CONVERSION] is True
+    assert result["data"]["enable_buying_power"] is False
+    assert result["data"]["enable_rankings"] is False
+    assert result["data"][CONF_DAILY_MOVE_THRESHOLD] is None
+
+
+async def test_options_flow_persists_manual_refresh_and_krw_conversion_choices(
+    hass: Any,
+) -> None:
+    entry = _existing_entry(hass)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {CONF_ENABLE_MANUAL_REFRESH: False, CONF_ENABLE_KRW_CONVERSION: False},
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options[CONF_ENABLE_MANUAL_REFRESH] is False
+    assert entry.options[CONF_ENABLE_KRW_CONVERSION] is False
+
+    # Re-opening the form must reflect the persisted (non-default) choice.
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    schema = result["data_schema"].schema
+    manual_refresh_key = next(key for key in schema if str(key) == CONF_ENABLE_MANUAL_REFRESH)
+    assert manual_refresh_key.default() is False
+
+
 async def test_options_flow_creates_entry_with_defaults(hass: Any) -> None:
     entry = _existing_entry(hass)
     result = await hass.config_entries.options.async_init(entry.entry_id)
@@ -372,6 +495,8 @@ async def test_options_flow_creates_entry_with_defaults(hass: Any) -> None:
             "candle_lookback": 252,
             "max_retries": 3,
             "request_timeout": 10,
+            CONF_ENABLE_MANUAL_REFRESH: True,
+            CONF_ENABLE_KRW_CONVERSION: True,
             "enable_buying_power": False,
             "enable_rankings": False,
             CONF_GAIN_COLOR: [211, 47, 47],
@@ -537,7 +662,12 @@ def test_translations_cover_all_error_and_abort_codes_used_by_the_flow() -> None
     config_errors = set(en["config"]["error"])
     config_aborts = set(en["config"]["abort"])
 
-    assert {"invalid_auth", "cannot_connect", "no_accounts"} <= config_errors
+    assert {
+        "invalid_auth",
+        "cannot_connect",
+        "no_accounts",
+        "account_not_found",
+    } <= config_errors
     assert {"already_configured", "reauth_successful", "unique_id_mismatch"} <= config_aborts
 
 
