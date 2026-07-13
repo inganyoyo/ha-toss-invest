@@ -1,0 +1,14 @@
+default_config:
+
+homeassistant:
+  name: Toss Invest Dev
+  latitude: !secret latitude
+  longitude: !secret longitude
+  elevation: 0
+  unit_system: metric
+  time_zone: Asia/Seoul
+
+logger:
+  default: info
+  logs:
+    custom_components.toss_invest: debug

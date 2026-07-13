@@ -1,0 +1,12 @@
+services:
+  homeassistant:
+    container_name: toss_invest_dev_ha
+    image: ghcr.io/home-assistant/home-assistant:2026.7.2
+    volumes:
+      - ./config:/config
+      - ./configuration.yaml:/config/configuration.yaml:ro
+      - ./secrets.yaml:/config/secrets.yaml:ro
+      - ../custom_components/toss_invest:/config/custom_components/toss_invest
+    ports:
+      - "8123:8123"
+    restart: unless-stopped

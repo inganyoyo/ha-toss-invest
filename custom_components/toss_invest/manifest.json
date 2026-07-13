@@ -1,0 +1,10 @@
+{
+  "domain": "toss_invest",
+  "name": "Toss Invest",
+  "codeowners": ["@inganyoyo"],
+  "config_flow": true,
+  "documentation": "https://github.com/inganyoyo/ha-toss-invest",
+  "issue_tracker": "https://github.com/inganyoyo/ha-toss-invest/issues",
+  "iot_class": "cloud_polling",
+  "version": "0.1.0"
+}

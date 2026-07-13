@@ -1,0 +1,17 @@
+# Python
+.venv/
+.pytest_cache/
+.mypy_cache/
+__pycache__/
+*.pyc
+*.egg-info/
+
+# Disposable Home Assistant dev environment
+dev/config/
+dev/secrets.yaml
+
+# Environment / secrets
+.env
+
+# Manager scratch directory
+.superpowers/
