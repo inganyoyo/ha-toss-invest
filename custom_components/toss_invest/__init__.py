@@ -8,14 +8,17 @@ from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import ConfigType
 
 from .api import TossInvestClient
-from .const import PLATFORMS
+from .const import DOMAIN, PLATFORMS
 from .coordinator import TossCoordinator, TossInvestRuntimeData, create_runtime
 
 type TossInvestConfigEntry = ConfigEntry[TossInvestRuntimeData]
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 BRANDING_ICON_PATH = Path(__file__).parent / "branding" / "icon.png"
 BRANDING_ICON_URL = "/toss_invest_static/icon.png"
