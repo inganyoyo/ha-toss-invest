@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import asyncio
 import logging
+import random
 from collections.abc import Mapping, Sequence
 from typing import Any, Literal
 
 import aiohttp
 
-from .auth import TokenManager, TossAuthError
-from .rate_limit import RateLimiter, TossRateLimitError
+from .auth import TokenManager, TossAuthError, TossApiError
+from .rate_limit import RateLimiter, TossRateLimitError, parse_retry_after
 
 __all__ = [
     "TossApiError",
@@ -20,15 +22,6 @@ _LOGGER = logging.getLogger(__name__)
 
 # Toss returns at most 200 symbols per batched Market Data / Market Indicators call.
 _MAX_SYMBOL_BATCH = 200
-
-
-class TossApiError(Exception):
-    """Raised for any 4xx/5xx Toss API response that is not an auth or rate-limit error."""
-
-    def __init__(self, request_id: str | None, code: str) -> None:
-        super().__init__(f"Toss API error {code} (request {request_id or 'unknown'})")
-        self.request_id = request_id
-        self.code = code
 
 
 class TossInvestClient:
@@ -71,31 +64,98 @@ class TossInvestClient:
         account_seq: str | None = None,
         params: Mapping[str, Any] | None = None,
     ) -> Any:
-        await self._limiter.async_wait(group)
-        token = await self._tokens.async_get_token()
-        headers = {"Authorization": f"Bearer {token}"}
-        if account_seq is not None:
-            headers["X-Tossinvest-Account"] = str(account_seq)
-        async with self._session.request(
-            method,
-            f"{self.BASE_URL}{path}",
-            headers=headers,
-            params=params,
-            timeout=self._timeout,
-        ) as response:
-            await self._limiter.async_update(group, response.headers)
-            payload: Any = await response.json(content_type=None)
-            if response.status == 401:
-                self._tokens.invalidate()
-                raise TossAuthError(_error_code(payload))
-            if response.status == 429:
-                raise TossRateLimitError(float(response.headers.get("Retry-After", "1")))
-            if response.status >= 400:
-                request_id = _error_request_id(payload)
-                code = _error_code(payload)
-                _LOGGER.debug("Toss API error code=%s request_id=%s", code, request_id)
-                raise TossApiError(request_id, code)
-            return payload["result"]
+        attempt = 0
+        max_attempts = 4  # 1 initial + 3 retries
+        has_refreshed_token = False
+
+        while True:
+            await self._limiter.async_wait(group)
+            token = await self._tokens.async_get_token()
+            headers = {"Authorization": f"Bearer {token}"}
+            if account_seq is not None:
+                headers["X-Tossinvest-Account"] = str(account_seq)
+
+            try:
+                async with self._session.request(
+                    method,
+                    f"{self.BASE_URL}{path}",
+                    headers=headers,
+                    params=params,
+                    timeout=self._timeout,
+                ) as response:
+                    await self._limiter.async_update(group, response.headers)
+
+                    if response.status == 401:
+                        if not has_refreshed_token:
+                            self._tokens.invalidate()
+                            has_refreshed_token = True
+                            continue
+                        else:
+                            try:
+                                payload = await response.json(content_type=None)
+                            except Exception:
+                                payload = None
+                            raise TossAuthError(_error_code(payload))
+
+                    if response.status == 429:
+                        try:
+                            payload = await response.json(content_type=None)
+                        except Exception:
+                            payload = None
+                        retry_after = parse_retry_after(
+                            response.headers.get("Retry-After"), default=1.0
+                        )
+                        raise TossRateLimitError(retry_after)
+
+                    if 500 <= response.status < 600:
+                        if attempt < max_attempts - 1:
+                            attempt += 1
+                            backoff = min(10.0, 0.5 * (2 ** (attempt - 1)))
+                            jittered = random.uniform(0.0, backoff)
+                            await asyncio.sleep(jittered)
+                            continue
+                        else:
+                            try:
+                                payload = await response.json(content_type=None)
+                            except Exception:
+                                payload = None
+                            request_id = (
+                                _error_request_id(payload) if payload else None
+                            ) or response.headers.get("X-Request-Id")
+                            raise TossApiError(request_id, f"server-error-{response.status}")
+
+                    if response.status >= 400:
+                        try:
+                            payload = await response.json(content_type=None)
+                        except Exception:
+                            payload = None
+                        request_id = (
+                            _error_request_id(payload) if payload else None
+                        ) or response.headers.get("X-Request-Id")
+                        code = _error_code(payload) if payload is not None else "api-error"
+                        _LOGGER.debug("Toss API error code=%s request_id=%s", code, request_id)
+                        raise TossApiError(request_id, code)
+
+                    # Success (2xx)
+                    try:
+                        payload = await response.json(content_type=None)
+                    except Exception:
+                        raise TossApiError(response.headers.get("X-Request-Id"), "api-error")
+
+                    if not isinstance(payload, dict) or "result" not in payload:
+                        raise TossApiError(response.headers.get("X-Request-Id"), "api-error")
+
+                    return payload["result"]
+
+            except (aiohttp.ClientError, asyncio.TimeoutError) as err:
+                if attempt < max_attempts - 1:
+                    attempt += 1
+                    backoff = min(10.0, 0.5 * (2 ** (attempt - 1)))
+                    jittered = random.uniform(0.0, backoff)
+                    await asyncio.sleep(jittered)
+                    continue
+                else:
+                    raise TossApiError(None, "connection-error") from err
 
     async def async_validate(self) -> None:
         """Exchange credentials for a token, raising `TossAuthError` if they are rejected."""

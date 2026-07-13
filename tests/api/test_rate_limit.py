@@ -113,3 +113,52 @@ async def test_concurrent_waits_on_same_group_are_serialized_and_spaced(
 
     observed.sort()
     assert observed == [pytest.approx(0.0), pytest.approx(1.0), pytest.approx(2.0)]
+
+
+async def test_rate_limit_lock_non_contention(monkeypatch: pytest.MonkeyPatch) -> None:
+    limiter = RateLimiter()
+    # Throttling STOCK for 100 seconds
+    await limiter.async_update("STOCK", {"Retry-After": "100"})
+
+    # Start async_wait. It should reserve slot, release lock, and sleep.
+    wait_task = asyncio.create_task(limiter.async_wait("STOCK"))
+    await asyncio.sleep(0.01)  # Let it enter wait and release lock
+
+    # While it's sleeping, calling async_update must complete immediately (no block).
+    update_task = asyncio.create_task(limiter.async_update("STOCK", {"X-RateLimit-Limit": "5"}))
+    await asyncio.wait_for(update_task, timeout=1.0)
+
+    wait_task.cancel()
+
+
+async def test_parse_retry_after_http_date() -> None:
+    from custom_components.toss_invest.api.rate_limit import parse_retry_after
+
+    # Mock clock to return a fixed epoch
+    fixed_epoch = 946684798.0  # Fri, 31 Dec 1999 23:59:58 GMT
+
+    def clock() -> float:
+        return fixed_epoch
+
+    # Test HTTP-date exactly 1 second in the future
+    res = parse_retry_after("Fri, 31 Dec 1999 23:59:59 GMT", clock=clock)
+    assert res == pytest.approx(1.0)
+
+    # Test HTTP-date in the past
+    res_past = parse_retry_after("Fri, 31 Dec 1999 23:59:50 GMT", clock=clock)
+    assert res_past == 0.0
+
+
+async def test_parse_retry_after_malformed() -> None:
+    from custom_components.toss_invest.api.rate_limit import parse_retry_after
+
+    # Non-number/non-date values should fallback to default
+    assert parse_retry_after("invalid-header", default=3.5) == 3.5
+    assert parse_retry_after("", default=2.0) == 2.0
+    assert parse_retry_after(None, default=1.5) == 1.5
+
+
+async def test_parse_retry_after_negative() -> None:
+    from custom_components.toss_invest.api.rate_limit import parse_retry_after
+
+    assert parse_retry_after("-10", default=1.0) == 0.0

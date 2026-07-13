@@ -6,7 +6,7 @@ from typing import Any
 
 import aiohttp
 
-from .rate_limit import RateLimiter, TossRateLimitError
+from .rate_limit import RateLimiter, TossRateLimitError, parse_retry_after
 
 TOKEN_PATH = "/oauth2/token"
 AUTH_RATE_LIMIT_GROUP = "AUTH"
@@ -21,6 +21,15 @@ class TossAuthError(Exception):
 
     def __init__(self, code: str) -> None:
         super().__init__(f"Toss auth error: {code}")
+        self.code = code
+
+
+class TossApiError(Exception):
+    """Raised for any 4xx/5xx Toss API response that is not an auth or rate-limit error."""
+
+    def __init__(self, request_id: str | None, code: str) -> None:
+        super().__init__(f"Toss API error {code} (request {request_id or 'unknown'})")
+        self.request_id = request_id
         self.code = code
 
 
@@ -73,22 +82,45 @@ class TokenManager:
             "client_id": self._client_id,
             "client_secret": self._client_secret,
         }
-        async with self._session.post(
-            f"{self._base_url}{TOKEN_PATH}", data=data, timeout=self._timeout
-        ) as response:
-            await self._limiter.async_update(AUTH_RATE_LIMIT_GROUP, response.headers)
-            payload: Any = await response.json(content_type=None)
-            if response.status == 429:
-                raise TossRateLimitError(float(response.headers.get("Retry-After", "1")))
-            if response.status >= 400:
-                code = (
-                    payload.get("error", "unauthorized")
-                    if isinstance(payload, dict)
-                    else "unauthorized"
+        try:
+            async with self._session.post(
+                f"{self._base_url}{TOKEN_PATH}", data=data, timeout=self._timeout
+            ) as response:
+                await self._limiter.async_update(AUTH_RATE_LIMIT_GROUP, response.headers)
+                try:
+                    payload: Any = await response.json(content_type=None)
+                except Exception:
+                    payload = None
+
+                if response.status == 429:
+                    retry_after = parse_retry_after(
+                        response.headers.get("Retry-After"), default=1.0
+                    )
+                    raise TossRateLimitError(retry_after)
+
+                if 500 <= response.status < 600:
+                    request_id = None
+                    if isinstance(payload, dict) and "error" in payload:
+                        err_data = payload["error"]
+                        if isinstance(err_data, dict):
+                            request_id = err_data.get("requestId")
+                    request_id = request_id or response.headers.get("X-Request-Id")
+                    raise TossApiError(request_id, f"auth-server-error-{response.status}")
+
+                if response.status >= 400:
+                    code = (
+                        payload.get("error", "unauthorized")
+                        if isinstance(payload, dict)
+                        else "unauthorized"
+                    )
+                    raise TossAuthError(str(code))
+
+                token = str(payload["access_token"])
+                expires_in = float(payload["expires_in"])
+                self._token = token
+                self._expires_at = self._clock() + max(
+                    expires_in - _EXPIRY_SAFETY_MARGIN_SECONDS, 0.0
                 )
-                raise TossAuthError(str(code))
-            token = str(payload["access_token"])
-            expires_in = float(payload["expires_in"])
-            self._token = token
-            self._expires_at = self._clock() + max(expires_in - _EXPIRY_SAFETY_MARGIN_SECONDS, 0.0)
-            return token
+                return token
+        except (aiohttp.ClientError, asyncio.TimeoutError) as err:
+            raise TossApiError(None, "auth-connection-error") from err

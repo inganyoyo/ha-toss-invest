@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from email.utils import parsedate_to_datetime
 import time
 from collections.abc import Callable, Mapping
 
@@ -40,6 +41,35 @@ def _parse_float(value: str | None) -> float | None:
         return None
 
 
+def parse_retry_after(
+    value: str | None, default: float = 1.0, clock: Callable[[], float] = time.time
+) -> float:
+    """Parse a Retry-After header. Handles delta-seconds, HTTP-date, and malformed inputs."""
+    if value is None:
+        return default
+    val_str = str(value).strip()
+    if not val_str:
+        return default
+    try:
+        val = float(val_str)
+        if val < 0:
+            return 0.0
+        return val
+    except ValueError:
+        pass
+
+    try:
+        dt = parsedate_to_datetime(val_str)
+        if dt is not None:
+            dt_epoch = dt.timestamp()
+            current_epoch = clock()
+            delay = dt_epoch - current_epoch
+            return max(0.0, delay)
+    except Exception:
+        pass
+    return default
+
+
 class RateLimiter:
     """Per-group, concurrency-safe request pacing driven by Toss rate-limit headers.
 
@@ -49,8 +79,14 @@ class RateLimiter:
     driven by `X-RateLimit-*` and `Retry-After` response headers as they arrive.
     """
 
-    def __init__(self, *, clock: Callable[[], float] = time.monotonic) -> None:
+    def __init__(
+        self,
+        *,
+        clock: Callable[[], float] = time.monotonic,
+        clock_epoch: Callable[[], float] = time.time,
+    ) -> None:
         self._clock = clock
+        self._clock_epoch = clock_epoch
         self._groups: dict[str, _GroupLimiter] = {}
 
     def _group(self, group: str) -> _GroupLimiter:
@@ -64,11 +100,12 @@ class RateLimiter:
         state = self._group(group)
         async with state.lock:
             now = self._clock()
-            delay = state.next_allowed - now
-            if delay > 0:
-                await asyncio.sleep(delay)
-                now = self._clock()
-            state.next_allowed = now + state.min_interval
+            start_time = max(state.next_allowed, now)
+            delay = start_time - now
+            state.next_allowed = start_time + state.min_interval
+
+        if delay > 0:
+            await asyncio.sleep(delay)
 
     async def async_update(self, group: str, headers: Mapping[str, str]) -> None:
         state = self._group(group)
@@ -84,6 +121,8 @@ class RateLimiter:
             if remaining is not None and remaining <= 0 and reset is not None:
                 state.next_allowed = max(state.next_allowed, now + reset)
 
-            retry_after = _parse_float(headers.get("Retry-After"))
-            if retry_after is not None:
+            retry_after = parse_retry_after(
+                headers.get("Retry-After"), default=0.0, clock=self._clock_epoch
+            )
+            if retry_after > 0:
                 state.next_allowed = max(state.next_allowed, now + retry_after)

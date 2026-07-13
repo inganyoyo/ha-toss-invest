@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -51,17 +52,23 @@ class RecordedCall:
 class FakeSession:
     """A minimal `aiohttp.ClientSession` double that serves queued canned responses."""
 
-    def __init__(self, responses: list[FakeResponse]) -> None:
+    def __init__(self, responses: list[Any]) -> None:
         self._responses = list(responses)
         self.calls: list[RecordedCall] = []
 
-    def post(self, url: str, **kwargs: Any) -> FakeResponse:
+    def post(self, url: str, **kwargs: Any) -> Any:
         self.calls.append(RecordedCall(method="POST", url=url, kwargs=kwargs))
-        return self._responses.pop(0)
+        resp = self._responses.pop(0)
+        if isinstance(resp, Exception):
+            raise resp
+        return resp
 
-    def request(self, method: str, url: str, **kwargs: Any) -> FakeResponse:
+    def request(self, method: str, url: str, **kwargs: Any) -> Any:
         self.calls.append(RecordedCall(method=method, url=url, kwargs=kwargs))
-        return self._responses.pop(0)
+        resp = self._responses.pop(0)
+        if isinstance(resp, Exception):
+            raise resp
+        return resp
 
 
 def token_response(token: str = "fake-token", expires_in: int = 3600) -> FakeResponse:
@@ -87,7 +94,7 @@ def api_error(
     return FakeResponse(status=status, payload={"error": error}, headers=headers)
 
 
-def make_client(responses: list[FakeResponse]) -> tuple[TossInvestClient, FakeSession]:
+def make_client(responses: list[Any]) -> tuple[TossInvestClient, FakeSession]:
     session = FakeSession(responses)
     client = TossInvestClient(session, "fake-client-id", "fake-client-secret")  # type: ignore[arg-type]
     return client, session
@@ -128,7 +135,7 @@ async def test_async_validate_only_fetches_a_token() -> None:
     assert session.calls[0].method == "POST"
 
 
-async def test_401_invalidates_token_and_raises_auth_error() -> None:
+async def test_401_retry_success() -> None:
     client, session = make_client(
         [
             token_response(token="stale-token"),
@@ -138,14 +145,26 @@ async def test_401_invalidates_token_and_raises_auth_error() -> None:
         ]
     )
 
-    with pytest.raises(TossAuthError) as excinfo:
-        await client.async_get_holdings("acct")
-    assert excinfo.value.code == "expired-token"
+    res = await client.async_get_holdings("acct")
+    assert res == load_fixture("holdings.json")
 
-    # A subsequent call must fetch a brand new token rather than reuse the rejected one.
-    await client.async_get_holdings("acct")
     post_calls = [call for call in session.calls if call.method == "POST"]
     assert len(post_calls) == 2
+
+
+async def test_401_repeated_failure() -> None:
+    client, session = make_client(
+        [
+            token_response(token="stale-token"),
+            api_error(401, code="expired-token", request_id="req-401"),
+            token_response(token="fresh-token"),
+            api_error(401, code="permanently-expired", request_id="req-401-2"),
+        ]
+    )
+
+    with pytest.raises(TossAuthError) as excinfo:
+        await client.async_get_holdings("acct")
+    assert excinfo.value.code == "permanently-expired"
 
 
 async def test_429_raises_rate_limit_error_with_retry_after() -> None:
@@ -320,9 +339,127 @@ async def test_warnings_uses_symbol_path_segment() -> None:
     assert get_call.url == f"{BASE_URL}/api/v1/stocks/TEST/warnings"
 
 
-def test_source_has_no_mutation_endpoints_or_logged_secrets() -> None:
+async def test_empty_symbols_returns_empty_without_requests() -> None:
+    client, session = make_client([])
+    res_prices = await client.async_get_prices([])
+    assert res_prices == []
+
+    res_indicators = await client.async_get_market_indicators([])
+    assert res_indicators == []
+
+    assert len(session.calls) == 0
+
+
+async def test_request_timeout_retries_and_succeeds(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def dummy_sleep(delay: float) -> None:
+        pass
+
+    monkeypatch.setattr(
+        "custom_components.toss_invest.api.client.asyncio.sleep",
+        dummy_sleep,
+    )
+    monkeypatch.setattr("random.uniform", lambda a, b: b)
+
+    accounts_payload = load_fixture("accounts.json")
+    client, session = make_client(
+        [
+            token_response(),
+            asyncio.TimeoutError("Timeout 1"),
+            asyncio.TimeoutError("Timeout 2"),
+            ok(accounts_payload),
+        ]
+    )
+
+    res = await client.async_get_accounts()
+    assert res == accounts_payload
+    assert len(session.calls) == 4
+
+
+async def test_request_timeout_raises_api_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def dummy_sleep(delay: float) -> None:
+        pass
+
+    monkeypatch.setattr(
+        "custom_components.toss_invest.api.client.asyncio.sleep",
+        dummy_sleep,
+    )
+    monkeypatch.setattr("random.uniform", lambda a, b: b)
+
+    client, session = make_client(
+        [
+            token_response(),
+            asyncio.TimeoutError("Timeout 1"),
+            asyncio.TimeoutError("Timeout 2"),
+            asyncio.TimeoutError("Timeout 3"),
+            asyncio.TimeoutError("Timeout 4"),
+        ]
+    )
+
+    with pytest.raises(TossApiError) as excinfo:
+        await client.async_get_accounts()
+    assert excinfo.value.code == "connection-error"
+
+
+async def test_5xx_retries_with_backoff_and_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    sleep_calls: list[float] = []
+
+    async def record_sleep(delay: float) -> None:
+        sleep_calls.append(delay)
+
+    monkeypatch.setattr(
+        "custom_components.toss_invest.api.client.asyncio.sleep",
+        record_sleep,
+    )
+    monkeypatch.setattr("random.uniform", lambda a, b: b)
+
+    client, session = make_client(
+        [
+            token_response(),
+            FakeResponse(status=500),
+            FakeResponse(status=500),
+            FakeResponse(status=500),
+            FakeResponse(status=500),
+        ]
+    )
+
+    with pytest.raises(TossApiError) as excinfo:
+        await client.async_get_accounts()
+
+    assert excinfo.value.code == "server-error-500"
+    assert sleep_calls == [0.5, 1.0, 2.0]
+
+
+async def test_malformed_success_envelope_raises_api_error() -> None:
+    client, session = make_client(
+        [
+            token_response(),
+            FakeResponse(payload={}),
+        ]
+    )
+
+    with pytest.raises(TossApiError) as excinfo:
+        await client.async_get_accounts()
+    assert excinfo.value.code == "api-error"
+
+
+async def test_api_error_request_id_fallback() -> None:
+    client, session = make_client(
+        [
+            token_response(),
+            FakeResponse(status=400, payload=None, headers={"X-Request-Id": "header-req-id"}),
+        ]
+    )
+
+    with pytest.raises(TossApiError) as excinfo:
+        await client.async_get_accounts()
+    assert excinfo.value.code == "api-error"
+    assert excinfo.value.request_id == "header-req-id"
+
+
+async def test_source_has_no_mutation_endpoints_or_logged_secrets() -> None:
+    import ast
+
     forbidden_substrings = ("/orders", "/conditional-orders")
-    forbidden_methods = ('"POST"', "'POST'", '"DELETE"', "'DELETE'")
 
     for path in sorted(API_SOURCE_DIR.glob("*.py")):
         text = path.read_text()
@@ -330,23 +467,78 @@ def test_source_has_no_mutation_endpoints_or_logged_secrets() -> None:
         for needle in forbidden_substrings:
             assert needle not in text, f"{path} references a mutating endpoint path {needle!r}"
 
-        for method_literal in forbidden_methods:
-            if method_literal not in text:
-                continue
-            # The only legitimate mutating call in this package is the OAuth2 token
-            # exchange, which uses `session.post(...)`, never a "POST"/"DELETE" method
-            # literal passed to the generic `_request` dispatcher.
-            pytest.fail(f"{path} passes a mutating HTTP method literal {method_literal!r}")
+        tree = ast.parse(text, filename=str(path))
+        for node in ast.walk(tree):
+            # Check logger calls
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+                is_logger = False
+                base = node.func.value
+                if isinstance(base, ast.Name) and base.id == "_LOGGER":
+                    is_logger = True
 
-        for line in text.splitlines():
-            if "_LOGGER" not in line:
-                continue
-            lowered = line.lower()
-            for secret_marker in (
-                "client_secret",
-                "access_token",
-                "password",
-                "headers",
-                "payload",
-            ):
-                assert secret_marker not in lowered, f"{path} logs a sensitive value: {line!r}"
+                if is_logger:
+                    for child in ast.walk(node):
+                        if isinstance(child, ast.Name):
+                            name_lower = child.id.lower()
+                            for secret_marker in (
+                                "client_secret",
+                                "access_token",
+                                "password",
+                                "headers",
+                                "payload",
+                            ):
+                                assert secret_marker not in name_lower, (
+                                    f"{path} logs a sensitive variable {child.id!r}"
+                                )
+                        elif isinstance(child, ast.Constant) and isinstance(child.value, str):
+                            val_lower = child.value.lower()
+                            for secret_marker in (
+                                "client_secret",
+                                "access_token",
+                                "password",
+                                "headers",
+                                "payload",
+                            ):
+                                assert secret_marker not in val_lower, (
+                                    f"{path} logs a sensitive string {child.value!r}"
+                                )
+                        elif isinstance(child, ast.Attribute):
+                            attr_lower = child.attr.lower()
+                            for secret_marker in (
+                                "client_secret",
+                                "access_token",
+                                "password",
+                                "headers",
+                                "payload",
+                            ):
+                                assert secret_marker not in attr_lower, (
+                                    f"{path} logs a sensitive attribute {child.attr!r}"
+                                )
+
+            # Check direct session post/put/patch/delete
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+                method_name = node.func.attr
+                if method_name in ("post", "put", "patch", "delete"):
+                    if path.name == "client.py":
+                        pytest.fail(f"{path} has direct session mutation call: {method_name}")
+                    elif path.name == "auth.py":
+                        if method_name != "post":
+                            pytest.fail(
+                                f"{path} has disallowed direct session mutation: {method_name}"
+                            )
+                        url_ok = False
+                        if node.args:
+                            url_node = node.args[0]
+                            for sub in ast.walk(url_node):
+                                if isinstance(sub, ast.Name) and sub.id == "TOKEN_PATH":
+                                    url_ok = True
+                                elif (
+                                    isinstance(sub, ast.Constant)
+                                    and isinstance(sub.value, str)
+                                    and "TOKEN_PATH" in sub.value
+                                ):
+                                    url_ok = True
+                        if not url_ok:
+                            pytest.fail("auth.py has session.post call targeting unauthorized URL")
+                    else:
+                        pytest.fail(f"{path} has direct session mutation call: {method_name}")

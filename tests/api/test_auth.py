@@ -7,7 +7,7 @@ from typing import Any
 import aiohttp
 import pytest
 
-from custom_components.toss_invest.api.auth import TokenManager, TossAuthError
+from custom_components.toss_invest.api.auth import TokenManager, TossAuthError, TossApiError
 from custom_components.toss_invest.api.rate_limit import RateLimiter, TossRateLimitError
 
 TOKEN_URL = "https://openapi.tossinvest.com/oauth2/token"
@@ -54,13 +54,16 @@ class RecordedCall:
 class FakeSession:
     """A minimal `aiohttp.ClientSession` double that serves queued canned responses."""
 
-    def __init__(self, responses: list[FakeResponse]) -> None:
+    def __init__(self, responses: list[Any]) -> None:
         self._responses = list(responses)
         self.calls: list[RecordedCall] = []
 
-    def post(self, url: str, **kwargs: Any) -> FakeResponse:
+    def post(self, url: str, **kwargs: Any) -> Any:
         self.calls.append(RecordedCall(method="POST", url=url, kwargs=kwargs))
-        return self._responses.pop(0)
+        resp = self._responses.pop(0)
+        if isinstance(resp, Exception):
+            raise resp
+        return resp
 
 
 def make_manager(session: Any, *, clock: Any = None) -> TokenManager:
@@ -246,3 +249,31 @@ async def test_concurrent_get_token_calls_share_a_single_fetch() -> None:
     first, second = await asyncio.gather(task_a, task_b)
     assert first == second == "shared-token"
     assert fake_session.post_count == 1
+
+
+async def test_oauth_500_raises_api_error() -> None:
+    session = FakeSession(
+        [
+            FakeResponse(
+                status=500,
+                payload={
+                    "error": {"code": "server-error", "message": "Failed", "requestId": "req-500"}
+                },
+            )
+        ]
+    )
+    manager = make_manager(session)
+
+    with pytest.raises(TossApiError) as excinfo:
+        await manager.async_get_token()
+    assert excinfo.value.code == "auth-server-error-500"
+    assert excinfo.value.request_id == "req-500"
+
+
+async def test_oauth_transport_error_raises_api_error() -> None:
+    session = FakeSession([aiohttp.ClientError("Network issue")])
+    manager = make_manager(session)
+
+    with pytest.raises(TossApiError) as excinfo:
+        await manager.async_get_token()
+    assert excinfo.value.code == "auth-connection-error"
