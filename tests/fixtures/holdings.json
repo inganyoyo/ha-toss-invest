@@ -1,0 +1,32 @@
+{
+  "holdings": [
+    {
+      "symbol": "TEST",
+      "name": "Sanitized Corp",
+      "marketCountry": "US",
+      "currency": "USD",
+      "quantity": "1.25",
+      "lastPrice": "10.10",
+      "averagePurchasePrice": "8.00",
+      "marketValue": { "purchaseAmount": "10", "amount": "12.625", "amountAfterCost": "12.50" },
+      "profitLoss": { "amount": "2.625", "amountAfterCost": "2.50", "rate": "0.2625", "rateAfterCost": "0.25" },
+      "dailyProfitLoss": { "amount": "0.50", "rate": "0.04" },
+      "cost": { "commission": "0.125", "tax": "0.02" }
+    },
+    {
+      "symbol": "SNTZ",
+      "name": "Sanitized Holdings Co",
+      "marketCountry": "KR",
+      "currency": "KRW",
+      "quantity": "10",
+      "lastPrice": "52000",
+      "averagePurchasePrice": "50000",
+      "marketValue": { "purchaseAmount": "500000", "amount": "520000", "amountAfterCost": "519000" },
+      "profitLoss": { "amount": "20000", "amountAfterCost": "19000", "rate": "0.04", "rateAfterCost": "0.038" },
+      "dailyProfitLoss": { "amount": "5000", "rate": "0.0097" },
+      "cost": { "commission": "1000", "tax": null }
+    }
+  ],
+  "totalPurchaseAmount": { "KRW": "500000", "USD": "10" },
+  "totalMarketValue": { "KRW": "520000", "USD": "12.625" }
+}

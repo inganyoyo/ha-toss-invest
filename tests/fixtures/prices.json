@@ -1,0 +1,16 @@
+{
+  "TEST": {
+    "symbol": "TEST",
+    "lastPrice": "10.10",
+    "change": "0.15",
+    "changeRate": "0.0151",
+    "asOf": "2026-07-13T09:30:00+09:00"
+  },
+  "SNTZ": {
+    "symbol": "SNTZ",
+    "lastPrice": "52000",
+    "change": "-500",
+    "changeRate": "-0.0095",
+    "asOf": "2026-07-13T09:30:00+09:00"
+  }
+}

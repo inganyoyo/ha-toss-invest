@@ -1,0 +1,14 @@
+{
+  "accounts": [
+    {
+      "accountId": "sanitized-account-1",
+      "accountName": "Sanitized Account 1",
+      "accountType": "STOCK"
+    },
+    {
+      "accountId": "sanitized-account-2",
+      "accountName": "Sanitized Account 2",
+      "accountType": "STOCK"
+    }
+  ]
+}
