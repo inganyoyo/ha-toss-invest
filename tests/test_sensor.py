@@ -178,3 +178,46 @@ async def test_diagnostic_and_candle_recorder_metadata(hass) -> None:
     from custom_components.toss_invest.sensor import TossHoldingSensor
 
     assert "candles" in TossHoldingSensor._unrecorded_attributes
+
+
+async def test_data_freshness_is_a_timestamp_diagnostic(hass) -> None:
+    await setup_integration(hass, api())
+    entity_id = "sensor.toss_invest_portfolio_data_freshness"
+    state = hass.states.get(entity_id)
+    registry_entry = er.async_get(hass).async_get(entity_id)
+
+    assert state is not None
+    assert state.attributes["device_class"] == "timestamp"
+    assert "T" in state.state
+    assert registry_entry is not None
+    assert registry_entry.entity_category == "diagnostic"
+
+
+async def test_buying_power_entities_are_absent_when_option_is_disabled(hass) -> None:
+    await setup_integration(hass, api())
+    registry = er.async_get(hass)
+
+    assert registry.async_get("sensor.toss_invest_portfolio_krw_buying_power") is None
+    assert registry.async_get("sensor.toss_invest_portfolio_usd_buying_power") is None
+
+
+async def test_buying_power_entities_are_enabled_and_native_when_option_is_enabled(hass) -> None:
+    await setup_integration(hass, api(), {"enable_buying_power": True})
+    registry = er.async_get(hass)
+
+    for currency in ("krw", "usd"):
+        entity_id = f"sensor.toss_invest_portfolio_{currency}_buying_power"
+        registry_entry = registry.async_get(entity_id)
+        state = hass.states.get(entity_id)
+        assert registry_entry is not None and registry_entry.disabled_by is None
+        assert state is not None and state.state == "123.45"
+        assert state.attributes["unit_of_measurement"] == currency.upper()
+
+
+async def test_missing_candle_data_returns_an_empty_diagnostic_payload(hass) -> None:
+    entry = await setup_integration(hass, api())
+    entry.runtime_data.candles.data = None
+
+    from custom_components.toss_invest.sensor import _candles
+
+    assert _candles(entry.runtime_data, "TEST") == []

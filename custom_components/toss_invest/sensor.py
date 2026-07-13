@@ -42,11 +42,18 @@ def _description(
     percentage: bool = False,
     enabled: bool = True,
     diagnostic: bool = False,
+    timestamp: bool = False,
 ) -> SensorEntityDescription:
     return SensorEntityDescription(
         key=key,
         name=name,
-        device_class=SensorDeviceClass.MONETARY if monetary else None,
+        device_class=(
+            SensorDeviceClass.MONETARY
+            if monetary
+            else SensorDeviceClass.TIMESTAMP
+            if timestamp
+            else None
+        ),
         native_unit_of_measurement=PERCENTAGE if percentage else None,
         entity_registry_enabled_default=enabled,
         entity_category=EntityCategory.DIAGNOSTIC if diagnostic else None,
@@ -106,7 +113,7 @@ ACCOUNT_DESCRIPTIONS = (
     _description("krw_usd_exchange_rate", "KRW USD exchange rate"),
     _description("kr_market_status", "KR market status"),
     _description("us_market_status", "US market status"),
-    _description("data_freshness", "Data freshness", diagnostic=True),
+    _description("data_freshness", "Data freshness", diagnostic=True, timestamp=True),
     _description("api_health", "API health", diagnostic=True),
 )
 
@@ -133,6 +140,8 @@ _PERIODS = {
 
 
 def _candles(runtime: TossInvestRuntimeData, symbol: str) -> list[Candle]:
+    if runtime.candles.data is None:
+        return []
     return sorted(runtime.candles.data.get(symbol, ()), key=lambda candle: candle.timestamp)
 
 
@@ -339,9 +348,11 @@ async def async_setup_entry(
 ) -> None:
     """Set up account sensors and reconcile newly discovered holdings."""
     runtime = entry.runtime_data
+    buying_power_enabled = bool(entry.options.get("enable_buying_power", False))
     async_add_entities(
         TossAccountSensor(runtime, entry.entry_id, description)
         for description in ACCOUNT_DESCRIPTIONS
+        if buying_power_enabled or not description.key.startswith("buying_power_")
     )
     known_symbols: set[str] = set()
 

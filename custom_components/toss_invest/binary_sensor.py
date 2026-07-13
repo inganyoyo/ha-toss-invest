@@ -27,13 +27,14 @@ class TossWarningBinarySensor(TossInvestEntity, BinarySensorEntity):
 
     @property
     def is_on(self) -> bool | None:
-        if self.symbol is None:
+        if self.symbol is None or self.runtime.warnings.data is None:
             return None
         return bool(self.runtime.warnings.data.get(self.symbol, ()))
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        warnings = self.runtime.warnings.data.get(self.symbol, ()) if self.symbol else ()
+        data = self.runtime.warnings.data
+        warnings = data.get(self.symbol, ()) if self.symbol and data is not None else ()
         return {
             "warning_codes": [warning.warning_type for warning in warnings],
             "warnings": [

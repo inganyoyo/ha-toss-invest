@@ -54,3 +54,15 @@ async def test_warning_availability_tracks_only_warning_dependency(hass) -> None
     entry.runtime_data.warnings.async_set_updated_data({"TEST": (warning,), "SNTZ": ()})
     await hass.async_block_till_done()
     assert hass.states.get(entity_id).state == "on"
+
+
+async def test_warning_properties_are_safe_before_coordinator_has_data(hass) -> None:
+    entry = await setup_integration(hass, api())
+    holding = entry.runtime_data.holdings.data.items[1]
+    entry.runtime_data.warnings.data = None
+
+    from custom_components.toss_invest.binary_sensor import TossWarningBinarySensor
+
+    entity = TossWarningBinarySensor(entry.runtime_data, entry.entry_id, holding)
+    assert entity.is_on is None
+    assert entity.extra_state_attributes == {"warning_codes": [], "warnings": []}
