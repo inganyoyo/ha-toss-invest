@@ -30,4 +30,5 @@ line-length = 100
 
 [tool.mypy]
 python_version = "3.14"
+explicit_package_bases = true
 packages = ["custom_components.toss_invest", "tests"]

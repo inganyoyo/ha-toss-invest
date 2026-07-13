@@ -1,0 +1,60 @@
+name: Bug report
+description: Report a reproducible Toss Invest integration problem
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include `client_secret`, client ID, bearer tokens, account identifiers,
+        holdings, or monetary values. Sanitize logs before submitting.
+  - type: input
+    id: ha_version
+    attributes:
+      label: Home Assistant version
+      placeholder: 2026.7.2
+    validations:
+      required: true
+  - type: input
+    id: integration_version
+    attributes:
+      label: Toss Invest version
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: dropdown
+    id: installation
+    attributes:
+      label: Installation method
+      options:
+        - HACS custom repository
+        - Manual copy
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Describe the smallest repeatable sequence and expected result.
+    validations:
+      required: true
+  - type: input
+    id: request_id
+    attributes:
+      label: Sanitized Toss request ID
+      description: Optional request ID only; do not paste the response or credentials.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Sanitized logs
+      description: Remove credentials, tokens, account IDs, symbols, and monetary values.
+      render: text
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety checks
+      options:
+        - label: I removed credentials, account data, symbols, and monetary values.
+          required: true
+        - label: I reproduced this without adding any order or trading endpoint.
+          required: true

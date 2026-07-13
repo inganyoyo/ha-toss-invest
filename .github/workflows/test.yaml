@@ -1,0 +1,35 @@
+name: Test
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+      - name: Set up Python
+        uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.14"
+          cache: pip
+      - name: Install test dependencies
+        run: python -m pip install -e ".[dev]" "homeassistant==2026.7.2"
+      - name: Test
+        run: pytest -q
+      - name: Ruff lint
+        run: ruff check .
+      - name: Ruff format
+        run: ruff format --check .
+      - name: Mypy
+        run: mypy custom_components/toss_invest
+      - name: Validate JSON metadata
+        run: |
+          python -m json.tool hacs.json >/dev/null
+          python -m json.tool custom_components/toss_invest/manifest.json >/dev/null

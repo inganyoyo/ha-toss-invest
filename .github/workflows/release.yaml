@@ -1,0 +1,64 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.14"
+          cache: pip
+      - run: python -m pip install -e ".[dev]" "homeassistant==2026.7.2"
+      - run: |
+          pytest -q
+          ruff check .
+          ruff format --check .
+          mypy custom_components/toss_invest
+      - name: Require tag and manifest versions to match
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          version = json.loads(
+              Path("custom_components/toss_invest/manifest.json").read_text()
+          )["version"]
+          tag = os.environ["RELEASE_TAG"]
+          if tag != f"v{version}":
+              raise SystemExit(f"tag {tag!r} does not match manifest version v{version}")
+          PY
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - uses: home-assistant/actions/hassfest@master
+      - uses: hacs/action@main
+        with:
+          category: integration
+  publish:
+    needs: [quality, validate]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6.0.2
+      - name: Build the HACS archive
+        run: |
+          cd custom_components/toss_invest
+          zip -r ../../toss_invest.zip .
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v3.0.0
+        with:
+          files: toss_invest.zip
+          generate_release_notes: true
