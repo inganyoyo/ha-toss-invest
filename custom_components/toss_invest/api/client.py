@@ -42,9 +42,15 @@ class TossInvestClient:
         client_secret: str,
         *,
         timeout: float = 10.0,
+        max_retries: int = 3,
     ) -> None:
+        if type(max_retries) is not int:
+            raise TypeError("max_retries must be an integer")
+        if not 0 <= max_retries <= 5:
+            raise ValueError("max_retries must be between 0 and 5")
         self._session = session
         self._timeout = aiohttp.ClientTimeout(total=timeout)
+        self._max_retries = max_retries
         self._limiter = RateLimiter()
         self._tokens = TokenManager(
             session,
@@ -65,7 +71,7 @@ class TossInvestClient:
         params: Mapping[str, Any] | None = None,
     ) -> Any:
         attempt = 0
-        max_attempts = 4  # 1 initial + 3 retries
+        max_attempts = self._max_retries + 1
         has_refreshed_token = False
 
         should_sleep = False

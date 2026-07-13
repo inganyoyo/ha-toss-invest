@@ -2,14 +2,48 @@ from __future__ import annotations
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
+from .api import TossInvestClient
 from .const import PLATFORMS
+from .coordinator import TossInvestRuntimeData, create_runtime
+
+type TossInvestConfigEntry = ConfigEntry[TossInvestRuntimeData]
 
 
-async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+async def _async_reload_entry(hass: HomeAssistant, entry: TossInvestConfigEntry) -> None:
+    await hass.config_entries.async_reload(entry.entry_id)
+
+
+async def async_setup_entry(hass: HomeAssistant, entry: TossInvestConfigEntry) -> bool:
+    options = entry.options
+    client = TossInvestClient(
+        async_get_clientsession(hass),
+        str(entry.data["client_id"]),
+        str(entry.data["client_secret"]),
+        timeout=float(options.get("request_timeout", 10)),
+        max_retries=int(options.get("max_retries", 3)),
+    )
+    runtime = create_runtime(
+        hass,
+        client,
+        str(entry.data["account_seq"]),
+        options,
+        entry,
+    )
+    entry.runtime_data = runtime
+
+    await runtime.holdings.async_config_entry_first_refresh()
+    await runtime.reference.async_config_entry_first_refresh()
+    await runtime.prices.async_config_entry_first_refresh()
+
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
     return True
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+async def async_unload_entry(hass: HomeAssistant, entry: TossInvestConfigEntry) -> bool:
+    if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
+        return False
+    await entry.runtime_data.async_shutdown()
+    return True

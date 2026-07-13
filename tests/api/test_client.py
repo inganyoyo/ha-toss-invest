@@ -98,10 +98,48 @@ def api_error(
     return FakeResponse(status=status, payload={"error": error}, headers=headers)
 
 
-def make_client(responses: list[Any]) -> tuple[TossInvestClient, FakeSession]:
+def make_client(
+    responses: list[Any], *, max_retries: int = 3
+) -> tuple[TossInvestClient, FakeSession]:
     session = FakeSession(responses)
-    client = TossInvestClient(session, "fake-client-id", "fake-client-secret")  # type: ignore[arg-type]
+    client = TossInvestClient(
+        session,  # type: ignore[arg-type]
+        "fake-client-id",
+        "fake-client-secret",
+        max_retries=max_retries,
+    )
     return client, session
+
+
+@pytest.mark.parametrize("max_retries", [0, 1, 5])
+async def test_configured_max_retries_is_exact(
+    monkeypatch: pytest.MonkeyPatch, max_retries: int
+) -> None:
+    async def no_sleep(delay: float) -> None:
+        pass
+
+    monkeypatch.setattr("custom_components.toss_invest.api.client.asyncio.sleep", no_sleep)
+    client, session = make_client(
+        [token_response(), *[asyncio.TimeoutError() for _ in range(max_retries + 1)]],
+        max_retries=max_retries,
+    )
+
+    with pytest.raises(TossApiError, match="connection-error"):
+        await client.async_get_accounts()
+
+    assert len([call for call in session.calls if call.method == "GET"]) == max_retries + 1
+
+
+@pytest.mark.parametrize("invalid", [-1, 6, True, 1.5, "1"])
+def test_max_retries_rejects_values_outside_integer_option_bound(invalid: object) -> None:
+    session = FakeSession([])
+    with pytest.raises((TypeError, ValueError)):
+        TossInvestClient(
+            session,  # type: ignore[arg-type]
+            "fake-client-id",
+            "fake-client-secret",
+            max_retries=invalid,  # type: ignore[arg-type]
+        )
 
 
 async def test_holdings_uses_cached_token_and_account_header() -> None:
