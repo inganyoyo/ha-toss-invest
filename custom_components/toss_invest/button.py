@@ -9,11 +9,12 @@ from contextlib import suppress
 
 from homeassistant.components.button import ButtonEntity, ButtonEntityDescription
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .coordinator import TossInvestRuntimeData
-from .entity import TossInvestEntity
+from .entity import TossInvestEntity, remove_registry_entries
 
 REFRESH_DESCRIPTION = ButtonEntityDescription(key="refresh", name="Refresh")
 _COOLDOWN_SECONDS = 10.0
@@ -81,4 +82,10 @@ async def async_setup_entry(
     entry: ConfigEntry[TossInvestRuntimeData],
     async_add_entities: AddEntitiesCallback,
 ) -> None:
+    if not bool(entry.options.get("enable_manual_refresh", True)):
+        remove_registry_entries(
+            hass,
+            Platform.BUTTON,
+            (f"{entry.entry_id}_portfolio_{REFRESH_DESCRIPTION.key}",),
+        )
     async_add_entities(build_refresh_entities(entry))

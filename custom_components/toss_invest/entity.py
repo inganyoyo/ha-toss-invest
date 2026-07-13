@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Any
 
+from homeassistant.const import Platform
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -11,6 +15,19 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN
 from .coordinator import TossCoordinator, TossInvestRuntimeData
 from .models import Holding
+
+
+def remove_registry_entries(
+    hass: HomeAssistant,
+    platform: Platform,
+    unique_ids: Iterable[str],
+) -> None:
+    """Remove stale option-gated entities by non-secret registry identifiers."""
+    registry = er.async_get(hass)
+    for unique_id in unique_ids:
+        entity_id = registry.async_get_entity_id(platform, DOMAIN, unique_id)
+        if entity_id is not None:
+            registry.async_remove(entity_id)
 
 
 class TossInvestEntity(CoordinatorEntity[TossCoordinator[Any]], Entity):

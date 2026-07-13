@@ -14,16 +14,14 @@ from homeassistant.components.sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import PERCENTAGE, Platform
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import entity_registry as er
 
-from .const import DOMAIN
 from .coordinator import (
     InvestorTradingRecord,
     KOREAN_MARKET_INDICATORS,
     RankingSnapshot,
     TossInvestRuntimeData,
 )
-from .entity import TossInvestEntity
+from .entity import TossInvestEntity, remove_registry_entries
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -242,12 +240,8 @@ def remove_ranking_registry_entries(
     """Remove option-gated ranking registry entries when rankings are disabled."""
     if entry.options.get("enable_rankings", False):
         return
-    registry = er.async_get(hass)
-    for description in RANKING_DESCRIPTIONS:
-        entity_id = registry.async_get_entity_id(
-            Platform.SENSOR,
-            DOMAIN,
-            f"{entry.entry_id}_portfolio_{description.key}",
-        )
-        if entity_id is not None:
-            registry.async_remove(entity_id)
+    remove_registry_entries(
+        hass,
+        Platform.SENSOR,
+        (f"{entry.entry_id}_portfolio_{description.key}" for description in RANKING_DESCRIPTIONS),
+    )

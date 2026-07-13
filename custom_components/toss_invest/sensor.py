@@ -13,7 +13,7 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import EntityCategory, PERCENTAGE
+from homeassistant.const import EntityCategory, PERCENTAGE, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -26,7 +26,7 @@ from .calculations import (
     calculate_volume_ratio,
 )
 from .coordinator import TossInvestRuntimeData
-from .entity import TossInvestEntity
+from .entity import TossInvestEntity, remove_registry_entries
 from .market_entities import build_market_entities, remove_ranking_registry_entries
 from .models import Candle, Holding, HoldingsOverview
 
@@ -351,6 +351,16 @@ async def async_setup_entry(
     runtime = entry.runtime_data
     remove_ranking_registry_entries(hass, entry)
     buying_power_enabled = bool(entry.options.get("enable_buying_power", False))
+    if not buying_power_enabled:
+        remove_registry_entries(
+            hass,
+            Platform.SENSOR,
+            (
+                f"{entry.entry_id}_portfolio_{description.key}"
+                for description in ACCOUNT_DESCRIPTIONS
+                if description.key.startswith("buying_power_")
+            ),
+        )
     async_add_entities(
         TossAccountSensor(runtime, entry.entry_id, description)
         for description in ACCOUNT_DESCRIPTIONS

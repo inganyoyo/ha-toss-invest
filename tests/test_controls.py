@@ -1,10 +1,12 @@
 import asyncio
 from contextlib import suppress
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import STATE_OFF, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import State
+from homeassistant.helpers import entity_registry as er
 
 from custom_components.toss_invest.button import TossInvestRefreshButton
 from custom_components.toss_invest.switch import TossInvestPrivacySwitch
@@ -73,6 +75,33 @@ async def test_manual_refresh_is_optionally_registered(hass) -> None:
     assert build_refresh_entities(disabled) == []
     enabled = await setup_integration(hass, api(), {"enable_manual_refresh": True})
     assert len(build_refresh_entities(enabled)) == 1
+
+
+async def test_disabling_manual_refresh_removes_registry_entry_and_state(hass) -> None:
+    client = api()
+    entry = await setup_integration(
+        hass,
+        client,
+        {"enable_manual_refresh": True},
+        platforms=["sensor", "button"],
+    )
+    entity_id = "button.toss_invest_portfolio_refresh"
+    registry = er.async_get(hass)
+    assert registry.async_get(entity_id) is not None
+    assert hass.states.get(entity_id) is not None
+
+    with (
+        patch("custom_components.toss_invest.TossInvestClient", return_value=client),
+        patch("custom_components.toss_invest.PLATFORMS", ["sensor", "button"]),
+    ):
+        hass.config_entries.async_update_entry(entry, options={"enable_manual_refresh": False})
+        await hass.async_block_till_done()
+
+    assert entry.state is ConfigEntryState.LOADED
+    assert registry.async_get(entity_id) is None
+    assert hass.states.get(entity_id) is None
+    assert registry.async_get("sensor.toss_invest_portfolio_market_value_krw") is not None
+    assert hass.states.get("sensor.toss_invest_portfolio_market_value_krw") is not None
 
 
 async def test_manual_refresh_coalesces_overlap_and_obeys_ten_second_cooldown(

@@ -38,7 +38,12 @@ def api() -> AsyncMock:
     return client
 
 
-async def setup_integration(hass, client: AsyncMock, options: dict | None = None):
+async def setup_integration(
+    hass,
+    client: AsyncMock,
+    options: dict | None = None,
+    platforms: list[str] | None = None,
+):
     import custom_components
 
     custom_components.__path__ = [str(Path.cwd() / "custom_components")]
@@ -55,7 +60,10 @@ async def setup_integration(hass, client: AsyncMock, options: dict | None = None
     entry.add_to_hass(hass)
     with (
         patch("custom_components.toss_invest.TossInvestClient", return_value=client),
-        patch("custom_components.toss_invest.PLATFORMS", ["sensor", "binary_sensor"]),
+        patch(
+            "custom_components.toss_invest.PLATFORMS",
+            platforms or ["sensor", "binary_sensor"],
+        ),
     ):
         assert await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
@@ -212,6 +220,31 @@ async def test_buying_power_entities_are_enabled_and_native_when_option_is_enabl
         assert registry_entry is not None and registry_entry.disabled_by is None
         assert state is not None and state.state == "123.45"
         assert state.attributes["unit_of_measurement"] == currency.upper()
+
+
+async def test_disabling_buying_power_removes_registry_entries_and_states(hass) -> None:
+    client = api()
+    entry = await setup_integration(hass, client, {"enable_buying_power": True})
+    registry = er.async_get(hass)
+    entity_ids = {
+        "sensor.toss_invest_portfolio_krw_buying_power",
+        "sensor.toss_invest_portfolio_usd_buying_power",
+    }
+    assert all(registry.async_get(entity_id) is not None for entity_id in entity_ids)
+    assert all(hass.states.get(entity_id) is not None for entity_id in entity_ids)
+
+    with (
+        patch("custom_components.toss_invest.TossInvestClient", return_value=client),
+        patch("custom_components.toss_invest.PLATFORMS", ["sensor", "binary_sensor"]),
+    ):
+        hass.config_entries.async_update_entry(entry, options={"enable_buying_power": False})
+        await hass.async_block_till_done()
+
+    assert entry.state is ConfigEntryState.LOADED
+    assert all(registry.async_get(entity_id) is None for entity_id in entity_ids)
+    assert all(hass.states.get(entity_id) is None for entity_id in entity_ids)
+    assert registry.async_get("sensor.toss_invest_portfolio_market_value_krw") is not None
+    assert hass.states.get("sensor.toss_invest_portfolio_market_value_krw") is not None
 
 
 async def test_missing_candle_data_returns_an_empty_diagnostic_payload(hass) -> None:
