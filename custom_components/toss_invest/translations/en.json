@@ -1,0 +1,75 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect Toss Invest",
+        "description": "Enter the Toss Securities Open API client credentials issued for your account. Credentials are stored only in this Home Assistant config entry and are never written to logs.",
+        "data": {
+          "client_id": "Client ID",
+          "client_secret": "Client secret"
+        }
+      },
+      "account": {
+        "title": "Select account",
+        "description": "Choose the Toss Securities account this integration should track.",
+        "data": {
+          "account_seq": "Account"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Reauthenticate Toss Invest",
+        "description": "Your Toss Securities credentials were rejected. Enter updated credentials for the same account to resume updates.",
+        "data": {
+          "client_id": "Client ID",
+          "client_secret": "Client secret"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "The client ID or client secret was rejected.",
+      "cannot_connect": "Could not reach the Toss Securities API. This is usually temporary.",
+      "no_accounts": "No accounts were found for these credentials."
+    },
+    "abort": {
+      "already_configured": "This account is already configured.",
+      "reauth_successful": "Reauthentication was successful.",
+      "unique_id_mismatch": "The new credentials do not match the account being reauthenticated."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Toss Invest options",
+        "description": "Configure refresh intervals, optional data, dashboard colors, privacy, and alert thresholds. All numeric options are bounded to safe ranges.",
+        "data": {
+          "open_price_interval": "Open-market price refresh interval",
+          "holdings_interval": "Holdings refresh interval",
+          "closed_price_interval": "Closed-market price refresh interval",
+          "reference_interval": "Reference data refresh interval",
+          "candle_lookback": "Daily candle lookback (trading days)",
+          "max_retries": "Maximum retry count",
+          "request_timeout": "Request timeout",
+          "enable_buying_power": "Enable buying power data",
+          "enable_rankings": "Enable market rankings data",
+          "gain_color": "Gain color",
+          "loss_color": "Loss color",
+          "neutral_color": "Neutral color",
+          "border_color": "Border color",
+          "glow_color": "Glow color",
+          "include_monetary_alert_payloads": "Include monetary values in alert events",
+          "alert_cooldown": "Alert repeat cooldown",
+          "stock_warning_alerts_enabled": "Enable stock warning alerts",
+          "stale_data_alerts_enabled": "Enable stale data alerts",
+          "api_failure_alerts_enabled": "Enable repeated API failure alerts",
+          "daily_move_threshold": "Daily move alert threshold",
+          "total_return_threshold": "Total return alert threshold",
+          "portfolio_daily_threshold": "Portfolio daily profit/loss alert threshold",
+          "near_high_threshold": "Near period-high alert threshold",
+          "near_low_threshold": "Near period-low alert threshold",
+          "drawdown_threshold": "Drawdown alert threshold",
+          "volume_spike_threshold": "Volume spike alert threshold"
+        }
+      }
+    }
+  }
+}

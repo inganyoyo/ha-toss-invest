@@ -1,0 +1,75 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Toss Invest 연결",
+        "description": "토스증권 오픈 API 클라이언트 인증 정보를 입력하세요. 인증 정보는 이 Home Assistant 설정 항목에만 저장되며 로그에 기록되지 않습니다.",
+        "data": {
+          "client_id": "클라이언트 ID",
+          "client_secret": "클라이언트 시크릿"
+        }
+      },
+      "account": {
+        "title": "계좌 선택",
+        "description": "이 통합구성요소가 추적할 토스증권 계좌를 선택하세요.",
+        "data": {
+          "account_seq": "계좌"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Toss Invest 재인증",
+        "description": "토스증권 인증 정보가 거부되었습니다. 동일한 계좌에 대한 업데이트를 재개하려면 새 인증 정보를 입력하세요.",
+        "data": {
+          "client_id": "클라이언트 ID",
+          "client_secret": "클라이언트 시크릿"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "클라이언트 ID 또는 클라이언트 시크릿이 거부되었습니다.",
+      "cannot_connect": "토스증권 API에 연결할 수 없습니다. 대부분 일시적인 문제입니다.",
+      "no_accounts": "이 인증 정보로 조회되는 계좌가 없습니다."
+    },
+    "abort": {
+      "already_configured": "이 계좌는 이미 설정되어 있습니다.",
+      "reauth_successful": "재인증에 성공했습니다.",
+      "unique_id_mismatch": "새 인증 정보가 재인증 중인 계좌와 일치하지 않습니다."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Toss Invest 옵션",
+        "description": "새로고침 주기, 선택적 데이터, 대시보드 색상, 개인정보 보호, 알림 임계값을 설정하세요. 모든 숫자 옵션은 안전한 범위로 제한됩니다.",
+        "data": {
+          "open_price_interval": "장중 시세 새로고침 주기",
+          "holdings_interval": "보유 종목 새로고침 주기",
+          "closed_price_interval": "장마감 시세 새로고침 주기",
+          "reference_interval": "참조 데이터 새로고침 주기",
+          "candle_lookback": "일봉 조회 기간(거래일)",
+          "max_retries": "최대 재시도 횟수",
+          "request_timeout": "요청 제한시간",
+          "enable_buying_power": "매수 가능 금액 데이터 사용",
+          "enable_rankings": "시장 순위 데이터 사용",
+          "gain_color": "상승 색상",
+          "loss_color": "하락 색상",
+          "neutral_color": "보합 색상",
+          "border_color": "테두리 색상",
+          "glow_color": "발광 색상",
+          "include_monetary_alert_payloads": "알림 이벤트에 금액 포함",
+          "alert_cooldown": "알림 반복 대기시간",
+          "stock_warning_alerts_enabled": "종목 경고 알림 사용",
+          "stale_data_alerts_enabled": "데이터 지연 알림 사용",
+          "api_failure_alerts_enabled": "반복 API 실패 알림 사용",
+          "daily_move_threshold": "일간 변동률 알림 임계값",
+          "total_return_threshold": "총 수익률 알림 임계값",
+          "portfolio_daily_threshold": "포트폴리오 일간 손익 알림 임계값",
+          "near_high_threshold": "기간 고점 근접 알림 임계값",
+          "near_low_threshold": "기간 저점 근접 알림 임계값",
+          "drawdown_threshold": "낙폭 알림 임계값",
+          "volume_spike_threshold": "거래량 급증 알림 임계값"
+        }
+      }
+    }
+  }
+}
