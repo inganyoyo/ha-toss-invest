@@ -4,6 +4,13 @@ views:
     icon: mdi:chart-line
     type: panel
     cards:
+      - type: markdown
+        content: >-
+          <div style="display:flex;align-items:center;gap:12px;">
+          <img src="/toss_invest_static/icon.png" width="48" height="48"
+          style="border-radius:12px;" alt="Toss Invest" />
+          <span style="font-size:1.4em;font-weight:700;">Toss Invest</span>
+          </div>
       - type: custom:layout-card
         layout_type: custom:grid-layout
         layout:

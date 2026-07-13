@@ -9,7 +9,13 @@ from homeassistant.config_entries import ConfigEntryAuthFailed, ConfigEntryState
 from homeassistant.exceptions import ConfigEntryNotReady
 from pytest_homeassistant_custom_component.common import MockConfigEntry  # type: ignore[import-untyped]
 
-from custom_components.toss_invest import async_setup_entry, async_unload_entry
+from custom_components.toss_invest import (
+    BRANDING_ICON_PATH,
+    BRANDING_ICON_URL,
+    async_setup,
+    async_setup_entry,
+    async_unload_entry,
+)
 from custom_components.toss_invest.api import TossApiError, TossAuthError
 from custom_components.toss_invest.const import DOMAIN, PLATFORMS
 from custom_components.toss_invest.coordinator import TossInvestRuntimeData
@@ -47,6 +53,25 @@ def entry(options: dict | None = None) -> MockConfigEntry:
         options=options or {},
         unique_id="hashed",
     )
+
+
+async def test_async_setup_registers_branding_icon_when_http_is_available(hass) -> None:
+    hass.http = AsyncMock()
+
+    assert await async_setup(hass, {}) is True
+
+    hass.http.async_register_static_paths.assert_awaited_once()
+    (configs,) = hass.http.async_register_static_paths.call_args.args
+    assert len(configs) == 1
+    assert configs[0].url_path == BRANDING_ICON_URL
+    assert Path(configs[0].path) == BRANDING_ICON_PATH
+    assert BRANDING_ICON_PATH.is_file()
+
+
+async def test_async_setup_skips_static_path_registration_without_http(hass) -> None:
+    hass.http = None
+
+    assert await async_setup(hass, {}) is True
 
 
 async def test_setup_first_refreshes_forwards_and_wires_options(hass) -> None:

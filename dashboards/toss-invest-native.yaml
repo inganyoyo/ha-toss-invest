@@ -8,6 +8,13 @@ views:
       - type: grid
         title: 요약
         cards:
+          - type: markdown
+            content: >-
+              <div style="display:flex;align-items:center;gap:12px;">
+              <img src="/toss_invest_static/icon.png" width="40" height="40"
+              style="border-radius:10px;" alt="Toss Invest" />
+              <span style="font-size:1.2em;font-weight:600;">Toss Invest</span>
+              </div>
           - type: tile
             entity: switch.toss_invest_portfolio_privacy_mode
             name: 금액 가리기

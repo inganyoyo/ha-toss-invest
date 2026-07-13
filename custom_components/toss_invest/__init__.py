@@ -1,18 +1,32 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from typing import Any
 
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.typing import ConfigType
 
 from .api import TossInvestClient
 from .const import PLATFORMS
 from .coordinator import TossCoordinator, TossInvestRuntimeData, create_runtime
 
 type TossInvestConfigEntry = ConfigEntry[TossInvestRuntimeData]
+
+BRANDING_ICON_PATH = Path(__file__).parent / "branding" / "icon.png"
+BRANDING_ICON_URL = "/toss_invest_static/icon.png"
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    if hass.http is not None:
+        await hass.http.async_register_static_paths(
+            [StaticPathConfig(BRANDING_ICON_URL, str(BRANDING_ICON_PATH), True)]
+        )
+    return True
 
 
 async def _async_reload_entry(hass: HomeAssistant, entry: TossInvestConfigEntry) -> None:
