@@ -179,8 +179,8 @@ def test_ci_workflows_have_expected_gates_and_permissions() -> None:
     release_text = _text(".github/workflows/release.yaml")
     assert 'tags: ["v*"]' in release_text
     assert "toss_invest.zip" in release_text
-    assert "softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda" in release_text
-    assert "# v3.0.0" in release_text
+    assert "softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228" in release_text
+    assert "# v3.0.2" in release_text
     assert "contents: write" in release_text
     assert "manifest.json" in release_text
     assert "ignore: brands" in release_text
@@ -196,10 +196,10 @@ def test_ci_workflows_have_expected_gates_and_permissions() -> None:
     assert workflows["release"]["jobs"]["publish"]["needs"] == ["quality", "validate"]
 
     workflow_text = "".join(_text(f".github/workflows/{name}.yaml") for name in workflows)
-    assert "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd" in workflow_text
-    assert "# v6.0.2" in workflow_text
-    assert "actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405" in test_text
-    assert "# v6.2.0" in test_text
+    assert "actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0" in workflow_text
+    assert "# v7.0.0" in workflow_text
+    assert "actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1" in test_text
+    assert "# v6.3.0" in test_text
 
 
 def test_dependabot_and_bug_report_metadata_are_valid() -> None:
