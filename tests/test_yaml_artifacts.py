@@ -169,7 +169,7 @@ def test_all_dashboard_monetary_patterns_are_privacy_masked() -> None:
         "period_low",
     )
     assert (
-        "const hidden = states['switch.toss_invest_portfolio_privacy_mode'].state !== 'off'"
+        "const hidden = states['switch.toss_invest_portfolio_privacy_mode']?.state !== 'off'"
         in enhanced
     )
     assert enhanced.count("return hidden ? '••••'") >= 3
@@ -187,7 +187,7 @@ def test_selected_holding_detail_has_real_candle_chart_metrics_and_warning() -> 
     assert "entity_id: sensor.*_daily_candles" in text
     assert "entity: this.entity_id" in text
     assert "data_generator:" in text
-    assert "entity.attributes.candles" in text
+    assert "entity?.attributes?.candles" in text
     assert "candle.timestamp" in text and "candle.close" in text
     assert "graph_span: 1y" in text
     for pattern in (
@@ -228,10 +228,24 @@ def test_summary_holdings_market_and_risk_sections_have_required_signals() -> No
 def test_enhanced_holding_returns_prefix_positive_values_without_changing_others() -> None:
     text = _dashboard_text("toss-invest-enhanced.yaml")
     assert "const signed = (state)" in text
-    assert "value > 0 ? `+${state.state}` : state.state" in text
+    assert "value > 0 ? `+${state?.state}` : state?.state" in text
     assert "오늘 ${signed(daily)}% · 총 ${signed(total)}%" in text
     assert "sensor.toss_invest_portfolio_*_buying_power" in text
     assert "sensor.toss_invest_portfolio_buying_power_*" not in text
+
+
+def test_enhanced_dashboard_javascript_fails_safe_while_states_are_loading() -> None:
+    text = _dashboard_text("toss-invest-enhanced.yaml")
+
+    assert "states['switch.toss_invest_portfolio_privacy_mode']?.state !== 'off'" in text
+    assert "entity?.state ?? '—'" in text
+    assert "entity?.attributes?.unit_of_measurement ?? ''" in text
+    assert "entity?.entity_id ?? ''" in text
+    assert "state?.state" in text
+    assert "price?.attributes?.unit_of_measurement ?? ''" in text
+    assert "price?.attributes.unit_of_measurement" not in text
+    assert "entity?.attributes?.candles ?? []" in text
+    assert "entity.attributes.candles" not in text
 
 
 async def test_blueprint_validates_with_home_assistant_and_substitutes_required_inputs(

@@ -5,7 +5,7 @@ services:
     volumes:
       - ./config/.storage:/config/.storage
       - ./configuration.yaml:/config/configuration.yaml:ro
-      - ./secrets.yaml.example:/config/secrets.yaml:ro
+      - ${TOSS_INVEST_DEV_SECRETS:-./secrets.yaml.example}:/config/secrets.yaml:ro
       - ../custom_components/toss_invest:/config/custom_components/toss_invest
     ports:
       - "8123:8123"

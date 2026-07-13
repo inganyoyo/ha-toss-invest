@@ -70,8 +70,8 @@ views:
                     show_state: false
                     show_label: true
                     label: >-
-                      [[[ const hidden = states['switch.toss_invest_portfolio_privacy_mode'].state !== 'off';
-                      return hidden ? '••••' : `${entity.state} ${entity.attributes.unit_of_measurement || ''}`; ]]]
+                      [[[ const hidden = states['switch.toss_invest_portfolio_privacy_mode']?.state !== 'off';
+                      return hidden ? '••••' : `${entity?.state ?? '—'} ${entity?.attributes?.unit_of_measurement ?? ''}`; ]]]
                     styles: *toss_card_styles
                   - type: custom:button-card
                     entity: sensor.toss_invest_portfolio_daily_profit_loss_krw
@@ -79,8 +79,8 @@ views:
                     show_state: false
                     show_label: true
                     label: >-
-                      [[[ const hidden = states['switch.toss_invest_portfolio_privacy_mode'].state !== 'off';
-                      return hidden ? '••••' : `${entity.state} ${entity.attributes.unit_of_measurement || ''}`; ]]]
+                      [[[ const hidden = states['switch.toss_invest_portfolio_privacy_mode']?.state !== 'off';
+                      return hidden ? '••••' : `${entity?.state ?? '—'} ${entity?.attributes?.unit_of_measurement ?? ''}`; ]]]
                     styles: *toss_card_styles
               - type: entities
                 title: 수익률 · 시장 · 갱신
@@ -157,24 +157,24 @@ views:
                         show_state: false
                         show_label: true
                         label: >-
-                          [[[ const hidden = states['switch.toss_invest_portfolio_privacy_mode'].state !== 'off';
-                          const id = entity.entity_id;
+                          [[[ const hidden = states['switch.toss_invest_portfolio_privacy_mode']?.state !== 'off';
+                          const id = entity?.entity_id ?? '';
                           const price = states[id.replace('_market_value', '_current_price')];
                           const daily = states[id.replace('_market_value', '_daily_return')];
                           const total = states[id.replace('_market_value', '_total_return_after_cost')];
                           const signed = (state) => {
-                            if (!state || ['unknown', 'unavailable'].includes(state.state)) return '—';
-                            const value = Number(state.state);
-                            return value > 0 ? `+${state.state}` : state.state;
+                            if (!state || ['unknown', 'unavailable'].includes(state?.state)) return '—';
+                            const value = Number(state?.state);
+                            return value > 0 ? `+${state?.state}` : state?.state;
                           };
-                          const money = hidden ? '••••' : `${entity.state} ${entity.attributes.unit_of_measurement || ''}`;
-                          const current = hidden ? '••••' : `${price?.state ?? '—'} ${price?.attributes.unit_of_measurement ?? ''}`;
+                          const money = hidden ? '••••' : `${entity?.state ?? '—'} ${entity?.attributes?.unit_of_measurement ?? ''}`;
+                          const current = hidden ? '••••' : `${price?.state ?? '—'} ${price?.attributes?.unit_of_measurement ?? ''}`;
                           return `${money}<br>현재가 ${current}<br>오늘 ${signed(daily)}% · 총 ${signed(total)}%`; ]]]
                         styles:
                           <<: *toss_card_styles
                           label:
                             - color: >-
-                                [[[ const id = entity.entity_id;
+                                [[[ const id = entity?.entity_id ?? '';
                                 const daily = Number(states[id.replace('_market_value', '_daily_return')]?.state);
                                 if (daily > 0) return 'var(--toss-gain-color, #d32f2f)';
                                 if (daily < 0) return 'var(--toss-loss-color, #1565c0)';
@@ -235,7 +235,7 @@ views:
                               stroke_width: 2
                               color: var(--toss-neutral-color, var(--primary-color))
                               data_generator: |
-                                return (entity.attributes.candles || []).map((candle) => [
+                                return (entity?.attributes?.candles ?? []).map((candle) => [
                                   new Date(candle.timestamp).getTime(), Number(candle.close)
                                 ]);
                   sort:
@@ -369,8 +369,8 @@ views:
                         show_state: false
                         show_label: true
                         label: >-
-                          [[[ const hidden = states['switch.toss_invest_portfolio_privacy_mode'].state !== 'off';
-                          return hidden ? '••••' : `${entity.state} ${entity.attributes.unit_of_measurement || ''}`; ]]]
+                          [[[ const hidden = states['switch.toss_invest_portfolio_privacy_mode']?.state !== 'off';
+                          return hidden ? '••••' : `${entity?.state ?? '—'} ${entity?.attributes?.unit_of_measurement ?? ''}`; ]]]
                         styles: *toss_card_styles
 
           - type: vertical-stack
