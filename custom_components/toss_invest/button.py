@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import time
 from collections.abc import Callable
+from contextlib import suppress
 
 from homeassistant.components.button import ButtonEntity, ButtonEntityDescription
 from homeassistant.config_entries import ConfigEntry
@@ -45,13 +46,25 @@ class TossInvestRefreshButton(TossInvestEntity, ButtonEntity):
         if self._last_started is not None and now - self._last_started < _COOLDOWN_SECONDS:
             return
         self._last_started = now
-        task = asyncio.create_task(self.runtime.async_refresh_all())
+        task = self.hass.async_create_background_task(
+            self.runtime.async_refresh_all(), "toss_invest_manual_refresh"
+        )
         self._refresh_task = task
         try:
             await task
         finally:
             if self._refresh_task is task:
                 self._refresh_task = None
+
+    async def async_will_remove_from_hass(self) -> None:
+        task = self._refresh_task
+        if task is not None and not task.done():
+            task.cancel()
+            with suppress(asyncio.CancelledError):
+                await task
+        if self._refresh_task is task:
+            self._refresh_task = None
+        await super().async_will_remove_from_hass()
 
 
 def build_refresh_entities(

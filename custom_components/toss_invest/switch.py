@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import STATE_ON
+from homeassistant.const import STATE_OFF
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
@@ -25,7 +25,7 @@ class TossInvestPrivacySwitch(TossInvestEntity, SwitchEntity, RestoreEntity):
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         previous = await self.async_get_last_state()
-        self._attr_is_on = previous is None or previous.state == STATE_ON
+        self._attr_is_on = previous is None or previous.state != STATE_OFF
         self.runtime.privacy = self._attr_is_on
 
     async def async_turn_on(self, **kwargs: object) -> None:

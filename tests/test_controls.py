@@ -1,7 +1,9 @@
 import asyncio
+from contextlib import suppress
 from unittest.mock import AsyncMock, Mock
 
-from homeassistant.const import STATE_OFF
+import pytest
+from homeassistant.const import STATE_OFF, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import State
 
 from custom_components.toss_invest.button import TossInvestRefreshButton
@@ -44,6 +46,23 @@ async def test_privacy_restores_previous_state(hass) -> None:
     assert entry.runtime_data.privacy is True
 
 
+@pytest.mark.parametrize("restored_state", [STATE_UNKNOWN, STATE_UNAVAILABLE])
+async def test_privacy_restore_fails_safe_for_non_explicit_states(
+    hass, restored_state: str
+) -> None:
+    entry = await setup_integration(hass, api())
+    entity = TossInvestPrivacySwitch(entry.runtime_data, entry.entry_id)
+    entity.hass = hass
+    entity.async_get_last_state = AsyncMock(  # type: ignore[method-assign]
+        return_value=State("switch.privacy", restored_state)
+    )
+
+    await entity.async_added_to_hass()
+
+    assert entity.is_on is True
+    assert entry.runtime_data.privacy is True
+
+
 async def test_manual_refresh_is_optionally_registered(hass) -> None:
     client = api()
     disabled = await setup_integration(hass, client, {"enable_manual_refresh": False})
@@ -71,6 +90,7 @@ async def test_manual_refresh_coalesces_overlap_and_obeys_ten_second_cooldown(
     refresh_all = AsyncMock(side_effect=refresh)
     monkeypatch.setattr(type(entry.runtime_data), "async_refresh_all", refresh_all)
     entity = TossInvestRefreshButton(entry.runtime_data, entry.entry_id, monotonic=lambda: now[0])
+    entity.hass = hass
 
     first = asyncio.create_task(entity.async_press())
     await started.wait()
@@ -86,3 +106,35 @@ async def test_manual_refresh_coalesces_overlap_and_obeys_ten_second_cooldown(
     finish.set()
     await entity.async_press()
     assert refresh_all.await_count == 2
+
+
+async def test_manual_refresh_is_cancelled_when_entity_is_removed(hass, monkeypatch) -> None:
+    entry = await setup_integration(hass, api())
+    started = asyncio.Event()
+    cancelled = asyncio.Event()
+
+    async def refresh(_runtime) -> None:
+        started.set()
+        try:
+            await asyncio.Event().wait()
+        finally:
+            cancelled.set()
+
+    monkeypatch.setattr(type(entry.runtime_data), "async_refresh_all", refresh)
+    entity = TossInvestRefreshButton(entry.runtime_data, entry.entry_id)
+    entity.hass = hass
+    press = hass.async_create_task(entity.async_press())
+    try:
+        await started.wait()
+
+        await entity.async_will_remove_from_hass()
+
+        await asyncio.wait_for(cancelled.wait(), timeout=0.1)
+        with pytest.raises(asyncio.CancelledError):
+            await press
+        assert entity._refresh_task is None
+    finally:
+        if not press.done():
+            press.cancel()
+            with suppress(asyncio.CancelledError):
+                await press
