@@ -2,7 +2,7 @@
 name = "toss-invest"
 version = "0.1.0"
 description = "Home Assistant integration for the Toss Securities Open API"
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 
 [project.optional-dependencies]
 dev = [
@@ -30,4 +30,4 @@ line-length = 100
 
 [tool.mypy]
 python_version = "3.14"
-packages = ["custom_components.toss_invest"]
+packages = ["custom_components.toss_invest", "tests"]
