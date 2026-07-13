@@ -23,6 +23,10 @@ def api() -> AsyncMock:
     client = AsyncMock()
     client.async_get_holdings.return_value = fixture("holdings.json")
     client.async_get_prices.return_value = fixture("prices.json")
+    client.async_get_candles.return_value = {"candles": [], "nextBefore": None}
+    client.async_get_warnings.return_value = []
+    client.async_get_market_indicators.return_value = []
+    client.async_get_investor_trading.return_value = {"records": [], "nextUntil": None}
     market = fixture("market.json")
     assert isinstance(market, dict)
     client.async_get_exchange_rate.return_value = market["exchangeRate"]
@@ -62,6 +66,9 @@ async def test_setup_first_refreshes_forwards_and_wires_options(hass) -> None:
     client.async_get_prices.assert_awaited_once()
     hass.config_entries.async_forward_entry_setups.assert_awaited_once_with(config_entry, PLATFORMS)
     assert config_entry.runtime_data.holdings.data is not None
+    assert config_entry.runtime_data.candles.last_success is not None
+    assert config_entry.runtime_data.warnings.last_success is not None
+    assert config_entry.runtime_data.market_context.last_success is not None
     assert len(config_entry.update_listeners) == 1
 
     hass.config_entries.async_reload = AsyncMock(return_value=True)
@@ -90,6 +97,39 @@ async def test_setup_permanent_auth_failure_requests_reauthentication(hass) -> N
     config_entry.mock_state(hass, ConfigEntryState.SETUP_IN_PROGRESS)
     client = api()
     client.async_get_holdings.side_effect = TossAuthError("invalid-client")
+    hass.config_entries.async_forward_entry_setups = AsyncMock()
+
+    with patch("custom_components.toss_invest.TossInvestClient", return_value=client):
+        with pytest.raises(ConfigEntryAuthFailed):
+            await async_setup_entry(hass, config_entry)
+
+    hass.config_entries.async_forward_entry_setups.assert_not_awaited()
+
+
+async def test_setup_advanced_transient_failure_does_not_block_essential_setup(hass) -> None:
+    config_entry = entry()
+    config_entry.add_to_hass(hass)
+    config_entry.mock_state(hass, ConfigEntryState.SETUP_IN_PROGRESS)
+    client = api()
+    client.async_get_candles.side_effect = TossApiError(None, "temporary")
+    hass.config_entries.async_forward_entry_setups = AsyncMock()
+
+    with patch("custom_components.toss_invest.TossInvestClient", return_value=client):
+        assert await async_setup_entry(hass, config_entry) is True
+
+    assert config_entry.runtime_data.holdings.data is not None
+    assert config_entry.runtime_data.prices.data is not None
+    assert config_entry.runtime_data.candles.last_update_success is False
+    assert config_entry.runtime_data.stale_groups == {"candles"}
+    hass.config_entries.async_forward_entry_setups.assert_awaited_once()
+
+
+async def test_setup_advanced_auth_failure_requests_reauthentication(hass) -> None:
+    config_entry = entry()
+    config_entry.add_to_hass(hass)
+    config_entry.mock_state(hass, ConfigEntryState.SETUP_IN_PROGRESS)
+    client = api()
+    client.async_get_warnings.side_effect = TossAuthError("invalid-client")
     hass.config_entries.async_forward_entry_setups = AsyncMock()
 
     with patch("custom_components.toss_invest.TossInvestClient", return_value=client):

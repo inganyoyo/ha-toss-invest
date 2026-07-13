@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import asyncio
+from typing import Any
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import TossInvestClient
 from .const import PLATFORMS
-from .coordinator import TossInvestRuntimeData, create_runtime
+from .coordinator import TossCoordinator, TossInvestRuntimeData, create_runtime
 
 type TossInvestConfigEntry = ConfigEntry[TossInvestRuntimeData]
 
@@ -36,6 +40,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: TossInvestConfigEntry) -
     await runtime.holdings.async_config_entry_first_refresh()
     await runtime.reference.async_config_entry_first_refresh()
     await runtime.prices.async_config_entry_first_refresh()
+
+    async def refresh_nonessential(coordinator: TossCoordinator[Any]) -> None:
+        try:
+            await coordinator.async_config_entry_first_refresh()
+        except ConfigEntryNotReady:
+            pass
+
+    await asyncio.gather(
+        *(refresh_nonessential(coordinator) for coordinator in runtime.advanced_coordinators)
+    )
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
