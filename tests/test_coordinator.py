@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from unittest.mock import AsyncMock
+from unittest.mock import patch
 
 import pytest
 from homeassistant.config_entries import ConfigEntryAuthFailed
@@ -227,12 +228,16 @@ async def test_reference_snapshot_and_timer_use_actual_session_time(hass) -> Non
         now_fn=lambda: now,
     )
     await runtime.holdings.async_refresh()
+    await runtime.prices.async_refresh()
+    api.async_get_prices.reset_mock()
     remove_listener = runtime.prices.async_add_listener(lambda: None)
     old_timer = runtime.prices._unsub_refresh
     await runtime.reference.async_refresh()
+    await hass.async_block_till_done()
     assert runtime.reference.data.kr_market_open is True
     assert runtime.reference.data.us_market_open is False
     assert runtime.prices.update_interval == timedelta(seconds=13)
+    api.async_get_prices.assert_awaited_once()
     assert runtime.prices._unsub_refresh is not old_timer
     remove_listener()
     await runtime.async_shutdown()
@@ -252,6 +257,29 @@ async def test_failed_reference_parse_preserves_last_good_calendars(hass) -> Non
     await runtime.reference.async_refresh()
     assert runtime.reference.last_update_success is False
     assert runtime.reference.kr_calendar is good_kr
+
+
+async def test_reference_callback_failure_preserves_calendar_and_freshness(hass) -> None:
+    now = datetime.fromisoformat("2026-07-13T10:00:00+09:00")
+    api = client()
+    runtime = create_runtime(hass, api, "account", {}, now_fn=lambda: now)
+    await runtime.reference.async_refresh()
+    good_kr = runtime.reference.kr_calendar
+    good_success = runtime.reference.last_success
+    api.async_get_market_calendar.side_effect = [
+        calendar("KR", now, now + timedelta(hours=1)),
+        calendar("US", now, now + timedelta(hours=1)),
+    ]
+
+    with patch.object(
+        type(runtime), "reschedule_prices", side_effect=RuntimeError("scheduling failed")
+    ):
+        await runtime.reference.async_refresh()
+
+    assert runtime.reference.last_update_success is False
+    assert runtime.reference.last_success is good_success
+    assert runtime.reference.kr_calendar is good_kr
+    assert "reference" in runtime.stale_groups
 
 
 async def test_timeout_maps_to_update_failed(hass) -> None:

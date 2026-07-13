@@ -87,6 +87,7 @@ class TossCoordinator(DataUpdateCoordinator[_DataT], Generic[_DataT]):
     async def _async_update_data(self) -> _DataT:
         try:
             data = await self._async_fetch()
+            self._on_data_success(data)
         except TossAuthError as err:
             self.stale_groups.add(self.group)
             raise ConfigEntryAuthFailed from err
@@ -97,12 +98,12 @@ class TossCoordinator(DataUpdateCoordinator[_DataT], Generic[_DataT]):
             KeyError,
             TypeError,
             asyncio.TimeoutError,
+            RuntimeError,
         ) as err:
             self.stale_groups.add(self.group)
             raise UpdateFailed(str(err)) from err
         self.last_success = datetime.now(UTC)
         self.stale_groups.discard(self.group)
-        self._on_data_success(data)
         return data
 
 
@@ -190,6 +191,7 @@ class ReferenceCoordinator(TossCoordinator[MarketSnapshot]):
         self._now_fn = now_fn
         self.kr_calendar: dict[str, Any] | None = None
         self.us_calendar: dict[str, Any] | None = None
+        self._pending_calendars: tuple[dict[str, Any], dict[str, Any]]
 
     async def _async_fetch(self) -> MarketSnapshot:
         exchange, kr_calendar, us_calendar = await asyncio.gather(
@@ -213,8 +215,13 @@ class ReferenceCoordinator(TossCoordinator[MarketSnapshot]):
         )
 
     def _on_data_success(self, data: MarketSnapshot) -> None:
+        previous = (self.kr_calendar, self.us_calendar)
         self.kr_calendar, self.us_calendar = self._pending_calendars
-        self._on_success()
+        try:
+            self._on_success()
+        except Exception:
+            self.kr_calendar, self.us_calendar = previous
+            raise
 
 
 @dataclass(slots=True)
@@ -250,9 +257,12 @@ class TossInvestRuntimeData:
         self.prices.update_interval = (
             self.open_price_interval if is_open else self.closed_price_interval
         )
-        self.prices._async_unsub_refresh()
-        if self.prices._listeners:
-            self.prices._schedule_refresh()
+        if self.prices.last_success is not None:
+            self.prices.hass.async_create_task(
+                self.prices.async_request_refresh(),
+                "toss_invest_reschedule_prices",
+                eager_start=False,
+            )
 
     async def async_shutdown(self) -> None:
         await asyncio.gather(
