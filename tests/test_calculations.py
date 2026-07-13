@@ -1,4 +1,5 @@
 from decimal import Decimal
+import pytest
 from custom_components.toss_invest.models import Holding, Candle
 from custom_components.toss_invest.calculations import (
     calculate_allocation,
@@ -18,7 +19,10 @@ from custom_components.toss_invest.calculations import (
 
 
 def make_mock_holding(
-    symbol: str, market_value: Decimal, currency: str, market_country: str = "US"
+    symbol: str,
+    market_value: Decimal,
+    currency: str,
+    market_country: str = "US",
 ) -> Holding:
     return Holding(
         symbol=symbol,
@@ -43,7 +47,10 @@ def make_mock_holding(
 
 
 def make_mock_candle(
-    timestamp: str, close: Decimal, volume: Decimal, currency: str = "USD"
+    timestamp: str,
+    close: Decimal,
+    volume: Decimal,
+    currency: str = "USD",
 ) -> Candle:
     return Candle(
         timestamp=timestamp,
@@ -57,7 +64,6 @@ def make_mock_candle(
 
 
 def test_concentration_and_return_are_decimal() -> None:
-    # Verify the specific example from Task 3 brief
     weights = [Decimal("60"), Decimal("25"), Decimal("15")]
     assert concentration(weights, 1) == Decimal("0.6")
     assert concentration(weights, 3) == Decimal("1")
@@ -89,10 +95,17 @@ def test_calculate_concentration_with_holdings() -> None:
         make_mock_holding("AAPL", Decimal("100"), "USD"),
         make_mock_holding("TSLA", Decimal("200"), "USD"),
     ]
-    # At 1300 exchange rate, AAPL=130000, TSLA=260000. Total=390000.
-    # Top 1 concentration should be 260000/390000 = 2/3
     res = calculate_concentration(holdings, 1, Decimal("1300"))
     assert abs(res - Decimal("2") / Decimal("3")) < Decimal("1e-9")
+
+
+def test_calculate_concentration_missing_rate_raises() -> None:
+    holdings = [
+        make_mock_holding("AAPL", Decimal("100"), "USD"),
+        make_mock_holding("TSLA", Decimal("200"), "USD"),
+    ]
+    with pytest.raises(ValueError, match="krw_usd_rate is required when passing Holding objects"):
+        calculate_concentration(holdings, 1)
 
 
 def test_calculate_allocation_empty_and_zero() -> None:
@@ -105,13 +118,17 @@ def test_calculate_allocation_empty_and_zero() -> None:
     }
 
 
+def test_calculate_allocation_invalid_group_by_raises() -> None:
+    holdings = [make_mock_holding("AAPL", Decimal("100"), "USD")]
+    with pytest.raises(ValueError, match="Invalid group_by:"):
+        calculate_allocation(holdings, Decimal("1300"), group_by="invalid_field")  # type: ignore
+
+
 def test_calculate_allocation_mixed_currencies() -> None:
     holdings = [
         make_mock_holding("AAPL", Decimal("10"), "USD", "US"),
         make_mock_holding("005930", Decimal("13000"), "KRW", "KR"),
     ]
-    # At 1300 KRW/USD, AAPL value in KRW is 13000. 005930 is 13000.
-    # Total is 26000. Each allocation is 0.5.
     res_symbol = calculate_allocation(holdings, Decimal("1300"), group_by="symbol")
     assert res_symbol == {"AAPL": Decimal("0.5"), "005930": Decimal("0.5")}
 
@@ -123,16 +140,15 @@ def test_calculate_allocation_mixed_currencies() -> None:
 
 
 def test_calculate_volatility() -> None:
-    # Less than 2 returns (needs at least 3 closes or 2 valid return points)
     assert calculate_volatility([]) is None
     assert calculate_volatility([Decimal("100")]) is None
     assert calculate_volatility([Decimal("100"), Decimal("105")]) is None
 
-    # Valid closes
-    closes = [Decimal("100"), Decimal("105"), Decimal("102"), Decimal("108")]
-    vol = calculate_volatility(closes)
-    assert vol is not None
-    assert vol > Decimal("0")
+    # Valid closes: [100, 105, 102, 108]
+    # Expected exact volatility is stdev([0.05, -0.02857142857142857, 0.058823529411764705]) * sqrt(252)
+    # stdev is sample standard deviation
+    vol = calculate_volatility([Decimal("100"), Decimal("105"), Decimal("102"), Decimal("108")])
+    assert vol == Decimal("0.7637712452538514380590591598")
 
     # With candles
     candles = [
@@ -142,23 +158,30 @@ def test_calculate_volatility() -> None:
         make_mock_candle("2026-07-04", Decimal("108"), Decimal("1300")),
     ]
     vol_c = calculate_volatility(candles)
-    assert vol_c == vol
+    assert vol_c == Decimal("0.7637712452538514380590591598")
+
+
+def test_calculate_volatility_newest_first() -> None:
+    # Candles in descending chronological order
+    candles = [
+        make_mock_candle("2026-07-04", Decimal("108"), Decimal("1300")),
+        make_mock_candle("2026-07-03", Decimal("102"), Decimal("1100")),
+        make_mock_candle("2026-07-02", Decimal("105"), Decimal("1200")),
+        make_mock_candle("2026-07-01", Decimal("100"), Decimal("1000")),
+    ]
+    # Sorter should sort them ascending and produce the correct output
+    vol = calculate_volatility(candles)
+    assert vol == Decimal("0.7637712452538514380590591598")
 
 
 def test_calculate_volume_ratio() -> None:
-    # Empty
     assert calculate_volume_ratio([]) is None
-    # 1 candle
     assert calculate_volume_ratio([Decimal("100")]) is None
-    # Window <= 0
     assert calculate_volume_ratio([Decimal("100"), Decimal("120")], window=0) is None
-
-    # Preceding average is 0
     assert calculate_volume_ratio([Decimal("0"), Decimal("100")], window=1) is None
 
     # Valid
     vols = [Decimal("100"), Decimal("200"), Decimal("150")]
-    # window=2: trailing average is average([100, 200]) = 150. Current = 150. Ratio = 1.0.
     assert calculate_volume_ratio(vols, window=2) == Decimal("1.0")
 
     # With candles
@@ -170,8 +193,29 @@ def test_calculate_volume_ratio() -> None:
     assert calculate_volume_ratio(candles, window=2) == Decimal("1.0")
 
 
+def test_calculate_volume_ratio_newest_first() -> None:
+    candles = [
+        make_mock_candle("2026-07-03", Decimal("10"), Decimal("150")),
+        make_mock_candle("2026-07-02", Decimal("10"), Decimal("200")),
+        make_mock_candle("2026-07-01", Decimal("10"), Decimal("100")),
+    ]
+    assert calculate_volume_ratio(candles, window=2) == Decimal("1.0")
+
+
+def test_calculate_volume_ratio_incomplete_window() -> None:
+    # 5 volumes: [100, 200, 150, 250, 180]
+    # window = 10 (incomplete window since only 4 preceding volumes exist)
+    # trailing volumes should be [100, 200, 150, 250]
+    # average = (100 + 200 + 150 + 250) / 4 = 700 / 4 = 175
+    # current = 180
+    # ratio = 180 / 175 = 36 / 35
+    vols = [Decimal("100"), Decimal("200"), Decimal("150"), Decimal("250"), Decimal("180")]
+    assert calculate_volume_ratio(vols, window=10) == Decimal("180") / (
+        Decimal("700") / Decimal("4")
+    )
+
+
 def test_compatibility_aliases() -> None:
-    # Check that compatibility aliases reference the correct calculations
     assert allocation([], Decimal("1300")) == {}
     assert concentration([Decimal("60"), Decimal("25"), Decimal("15")], 1) == Decimal("0.6")
     assert period_return(Decimal("100"), Decimal("125")) == Decimal("0.25")

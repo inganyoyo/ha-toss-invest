@@ -11,6 +11,9 @@ def calculate_allocation(
     group_by: Literal["symbol", "currency", "market_country"] = "symbol",
 ) -> dict[str, Decimal]:
     """Calculate the portfolio allocation by symbol, currency, or country."""
+    if group_by not in ("symbol", "currency", "market_country"):
+        raise ValueError(f"Invalid group_by: {group_by}")
+
     if not holdings:
         return {}
 
@@ -22,10 +25,8 @@ def calculate_allocation(
             key = holding.symbol
         elif group_by == "currency":
             key = holding.currency
-        elif group_by == "market_country":
-            key = holding.market_country
         else:
-            key = holding.symbol
+            key = holding.market_country
 
         if holding.currency.upper() == "USD":
             krw_val = holding.market_value * krw_usd_rate
@@ -44,15 +45,20 @@ def calculate_allocation(
 def calculate_concentration(
     values: list[Decimal] | list[Holding],
     count: int,
-    krw_usd_rate: Decimal = Decimal("1"),
+    krw_usd_rate: Decimal | None = None,
 ) -> Decimal:
     """Calculate portfolio concentration of top elements."""
     if not values or count <= 0:
         return Decimal("0")
 
+    has_holding = any(isinstance(val, Holding) for val in values)
+    if has_holding and krw_usd_rate is None:
+        raise ValueError("krw_usd_rate is required when passing Holding objects")
+
     decimal_values: list[Decimal] = []
     for val in values:
         if isinstance(val, Holding):
+            assert krw_usd_rate is not None
             if val.currency.upper() == "USD":
                 decimal_values.append(val.market_value * krw_usd_rate)
             else:
@@ -87,22 +93,23 @@ def calculate_volatility(closes: list[Decimal] | list[Candle]) -> Decimal | None
     if not closes:
         return None
 
+    decimal_closes: list[Decimal] = []
     if closes and isinstance(closes[0], Candle):
         candles = [c for c in closes if isinstance(c, Candle)]
         sorted_candles = sorted(candles, key=lambda c: c.timestamp)
         decimal_closes = [c.close for c in sorted_candles]
     else:
-        decimal_closes = [Decimal(str(c)) for c in closes]  # type: ignore
+        decimal_closes = [Decimal(str(c)) for c in closes]
 
     returns = [
-        float(decimal_closes[i] / decimal_closes[i - 1] - 1)
+        decimal_closes[i] / decimal_closes[i - 1] - Decimal("1")
         for i in range(1, len(decimal_closes))
         if decimal_closes[i - 1] != Decimal("0")
     ]
     if len(returns) < 2:
         return None
 
-    return Decimal(str(stdev(returns))) * Decimal("252").sqrt()
+    return stdev(returns) * Decimal("252").sqrt()
 
 
 def calculate_volume_ratio(
@@ -113,12 +120,13 @@ def calculate_volume_ratio(
     if not volumes or window <= 0:
         return None
 
+    decimal_volumes: list[Decimal] = []
     if volumes and isinstance(volumes[0], Candle):
         candles = [c for c in volumes if isinstance(c, Candle)]
         sorted_candles = sorted(candles, key=lambda c: c.timestamp)
         decimal_volumes = [c.volume for c in sorted_candles]
     else:
-        decimal_volumes = [Decimal(str(v)) for v in volumes]  # type: ignore
+        decimal_volumes = [Decimal(str(v)) for v in volumes]
 
     if len(decimal_volumes) < 2:
         return None
