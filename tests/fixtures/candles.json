@@ -1,10 +1,50 @@
 {
-  "symbol": "TEST",
   "candles": [
-    { "date": "2026-07-06", "open": "9.80", "high": "10.05", "low": "9.75", "close": "10.00", "volume": "12000" },
-    { "date": "2026-07-07", "open": "10.00", "high": "10.20", "low": "9.90", "close": "10.05", "volume": "11000" },
-    { "date": "2026-07-08", "open": "10.05", "high": "10.30", "low": "9.95", "close": "10.15", "volume": "9800" },
-    { "date": "2026-07-09", "open": "10.15", "high": "10.40", "low": "10.05", "close": "10.10", "volume": "10200" },
-    { "date": "2026-07-10", "open": "10.10", "high": "10.25", "low": "9.90", "close": "10.10", "volume": "10500" }
-  ]
+    {
+      "timestamp": "2026-07-10T09:00:00+09:00",
+      "openPrice": "10.10",
+      "highPrice": "10.25",
+      "lowPrice": "9.90",
+      "closePrice": "10.10",
+      "volume": "10500",
+      "currency": "USD"
+    },
+    {
+      "timestamp": "2026-07-09T09:00:00+09:00",
+      "openPrice": "10.15",
+      "highPrice": "10.40",
+      "lowPrice": "10.05",
+      "closePrice": "10.10",
+      "volume": "10200",
+      "currency": "USD"
+    },
+    {
+      "timestamp": "2026-07-08T09:00:00+09:00",
+      "openPrice": "10.05",
+      "highPrice": "10.30",
+      "lowPrice": "9.95",
+      "closePrice": "10.15",
+      "volume": "9800",
+      "currency": "USD"
+    },
+    {
+      "timestamp": "2026-07-07T09:00:00+09:00",
+      "openPrice": "10.00",
+      "highPrice": "10.20",
+      "lowPrice": "9.90",
+      "closePrice": "10.05",
+      "volume": "11000",
+      "currency": "USD"
+    },
+    {
+      "timestamp": "2026-07-06T09:00:00+09:00",
+      "openPrice": "9.80",
+      "highPrice": "10.05",
+      "lowPrice": "9.75",
+      "closePrice": "10.00",
+      "volume": "12000",
+      "currency": "USD"
+    }
+  ],
+  "nextBefore": "2026-07-06T09:00:00+09:00"
 }

@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
-from types import MappingProxyType
 from typing import Any, Literal, overload
 
 
@@ -28,19 +26,20 @@ def parse_decimal(value: Any, field: str, *, optional: bool = False) -> Decimal 
 
 @dataclass(frozen=True, slots=True)
 class MoneyByCurrency:
-    """Monetary amounts keyed by currency code, e.g. native KRW and USD totals."""
+    """Mirrors the OpenAPI `Price` schema: a KRW/USD-converted aggregate amount.
 
-    amounts: Mapping[str, Decimal]
+    `krw` is always present (0 when there are no KR holdings). `usd` is null
+    when there are no US holdings.
+    """
+
+    krw: Decimal
+    usd: Decimal | None
 
     @classmethod
     def from_api(cls, data: dict[str, Any]) -> "MoneyByCurrency":
         return cls(
-            amounts=MappingProxyType(
-                {
-                    str(currency): parse_decimal(amount, f"MoneyByCurrency.{currency}")
-                    for currency, amount in data.items()
-                }
-            )
+            krw=parse_decimal(data["krw"], "Price.krw"),
+            usd=parse_decimal(data.get("usd"), "Price.usd", optional=True),
         )
 
 
@@ -107,69 +106,122 @@ class Holding:
 
 @dataclass(frozen=True, slots=True)
 class HoldingsOverview:
-    holdings: tuple[Holding, ...]
+    """Mirrors the `result` body of `GET /api/v1/holdings` (`HoldingsOverview` schema)."""
+
     total_purchase_amount: MoneyByCurrency
-    total_market_value: MoneyByCurrency
+    market_value_amount: MoneyByCurrency
+    market_value_amount_after_cost: MoneyByCurrency
+    profit_loss_amount: MoneyByCurrency
+    profit_loss_amount_after_cost: MoneyByCurrency
+    profit_loss_rate: Decimal
+    profit_loss_rate_after_cost: Decimal
+    daily_profit_loss_amount: MoneyByCurrency
+    daily_profit_loss_rate: Decimal
+    items: tuple[Holding, ...]
 
     @classmethod
     def from_api(cls, data: dict[str, Any]) -> "HoldingsOverview":
+        market_value = data["marketValue"]
+        profit_loss = data["profitLoss"]
+        daily_profit_loss = data["dailyProfitLoss"]
         return cls(
-            holdings=tuple(Holding.from_api(item) for item in data.get("holdings", [])),
-            total_purchase_amount=MoneyByCurrency.from_api(data.get("totalPurchaseAmount", {})),
-            total_market_value=MoneyByCurrency.from_api(data.get("totalMarketValue", {})),
+            total_purchase_amount=MoneyByCurrency.from_api(data["totalPurchaseAmount"]),
+            market_value_amount=MoneyByCurrency.from_api(market_value["amount"]),
+            market_value_amount_after_cost=MoneyByCurrency.from_api(
+                market_value["amountAfterCost"]
+            ),
+            profit_loss_amount=MoneyByCurrency.from_api(profit_loss["amount"]),
+            profit_loss_amount_after_cost=MoneyByCurrency.from_api(profit_loss["amountAfterCost"]),
+            profit_loss_rate=parse_decimal(profit_loss["rate"], "profitLoss.rate"),
+            profit_loss_rate_after_cost=parse_decimal(
+                profit_loss["rateAfterCost"], "profitLoss.rateAfterCost"
+            ),
+            daily_profit_loss_amount=MoneyByCurrency.from_api(daily_profit_loss["amount"]),
+            daily_profit_loss_rate=parse_decimal(daily_profit_loss["rate"], "dailyProfitLoss.rate"),
+            items=tuple(Holding.from_api(item) for item in data.get("items", [])),
         )
 
 
 @dataclass(frozen=True, slots=True)
 class Candle:
-    date: str
+    """Mirrors the OpenAPI `Candle` schema (one entry of a `CandlePageResponse`)."""
+
+    timestamp: str
     open: Decimal
     high: Decimal
     low: Decimal
     close: Decimal
     volume: Decimal
+    currency: str
 
     @classmethod
     def from_api(cls, data: dict[str, Any]) -> "Candle":
         return cls(
-            date=str(data["date"]),
-            open=parse_decimal(data["open"], "candle.open"),
-            high=parse_decimal(data["high"], "candle.high"),
-            low=parse_decimal(data["low"], "candle.low"),
-            close=parse_decimal(data["close"], "candle.close"),
+            timestamp=str(data["timestamp"]),
+            open=parse_decimal(data["openPrice"], "candle.openPrice"),
+            high=parse_decimal(data["highPrice"], "candle.highPrice"),
+            low=parse_decimal(data["lowPrice"], "candle.lowPrice"),
+            close=parse_decimal(data["closePrice"], "candle.closePrice"),
             volume=parse_decimal(data["volume"], "candle.volume"),
+            currency=str(data["currency"]),
         )
 
 
 @dataclass(frozen=True, slots=True)
 class MarketSnapshot:
+    """Combines `ExchangeRateResponse` with the KR/US `MarketCalendarResponse` "today" entries.
+
+    No single Toss endpoint returns this combination; a coordinator assembles it from three
+    read-only calls. Each nested payload keeps the exact field names of its source schema so
+    `from_api` can be fed real (aggregated) API responses. Market-open is derived the same way
+    the calendar schemas define "holiday": KR is closed when `today.integrated` is null, US is
+    closed when every one of `today.dayMarket/preMarket/regularMarket/afterMarket` is null.
+    """
+
     kr_market_open: bool
     us_market_open: bool
-    krw_usd_exchange_rate: Decimal
-    as_of: str
+    krw_usd_rate: Decimal
+    krw_usd_rate_valid_from: str
+    krw_usd_rate_valid_until: str
 
     @classmethod
     def from_api(cls, data: dict[str, Any]) -> "MarketSnapshot":
+        exchange_rate = data["exchangeRate"]
+        kr_today = data["krMarketCalendar"]["today"]
+        us_today = data["usMarketCalendar"]["today"]
         return cls(
-            kr_market_open=bool(data["krMarketOpen"]),
-            us_market_open=bool(data["usMarketOpen"]),
-            krw_usd_exchange_rate=parse_decimal(data["krwUsdExchangeRate"], "krwUsdExchangeRate"),
-            as_of=str(data["asOf"]),
+            kr_market_open=kr_today.get("integrated") is not None,
+            us_market_open=any(
+                us_today.get(session) is not None
+                for session in ("dayMarket", "preMarket", "regularMarket", "afterMarket")
+            ),
+            krw_usd_rate=parse_decimal(exchange_rate["rate"], "exchangeRate.rate"),
+            krw_usd_rate_valid_from=str(exchange_rate["validFrom"]),
+            krw_usd_rate_valid_until=str(exchange_rate["validUntil"]),
         )
 
 
 @dataclass(frozen=True, slots=True)
 class StockWarning:
-    symbol: str
-    code: str
-    message: str
-    issued_at: str
+    """Mirrors one entry of `GET /api/v1/stocks/{symbol}/warnings` (`StockWarning` schema).
+
+    The API response does not include the symbol (it is a path parameter, not a payload
+    field), so callers associate the symbol from request context.
+    """
+
+    warning_type: str
+    exchange: str | None
+    start_date: str | None
+    end_date: str | None
 
     @classmethod
     def from_api(cls, data: dict[str, Any]) -> "StockWarning":
+        exchange = data.get("exchange")
+        start_date = data.get("startDate")
+        end_date = data.get("endDate")
         return cls(
-            symbol=str(data["symbol"]),
-            code=str(data["code"]),
-            message=str(data.get("message", "")),
-            issued_at=str(data["issuedAt"]),
+            warning_type=str(data["warningType"]),
+            exchange=str(exchange) if exchange is not None else None,
+            start_date=str(start_date) if start_date is not None else None,
+            end_date=str(end_date) if end_date is not None else None,
         )

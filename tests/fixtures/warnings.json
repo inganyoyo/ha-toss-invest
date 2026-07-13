@@ -1,16 +1,14 @@
-{
-  "warnings": [
-    {
-      "symbol": "TEST",
-      "code": "CAUTION",
-      "message": "Sanitized caution notice",
-      "issuedAt": "2026-07-10T00:00:00+09:00"
-    },
-    {
-      "symbol": "SNTZ",
-      "code": "FUTURE_WARNING_CODE",
-      "message": "Sanitized unknown warning",
-      "issuedAt": "2026-07-11T00:00:00+09:00"
-    }
-  ]
-}
+[
+  {
+    "warningType": "OVERHEATED",
+    "exchange": "KRX",
+    "startDate": "2026-07-10",
+    "endDate": "2026-07-17"
+  },
+  {
+    "warningType": "FUTURE_WARNING_CODE",
+    "exchange": null,
+    "startDate": "2026-07-11",
+    "endDate": null
+  }
+]

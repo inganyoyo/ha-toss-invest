@@ -1,6 +1,59 @@
 {
-  "krMarketOpen": true,
-  "usMarketOpen": false,
-  "krwUsdExchangeRate": "1350.25",
-  "asOf": "2026-07-13T09:30:00+09:00"
+  "exchangeRate": {
+    "baseCurrency": "USD",
+    "quoteCurrency": "KRW",
+    "rate": "1350.25",
+    "midRate": "1345.10",
+    "basisPoint": "38",
+    "rateChangeType": "UP",
+    "validFrom": "2026-07-13T09:30:00+09:00",
+    "validUntil": "2026-07-13T09:31:00+09:00"
+  },
+  "krMarketCalendar": {
+    "today": {
+      "date": "2026-07-13",
+      "integrated": {
+        "preMarket": {
+          "startTime": "2026-07-13T08:00:00+09:00",
+          "singlePriceAuctionStartTime": "2026-07-13T08:50:00+09:00",
+          "endTime": "2026-07-13T09:00:00+09:00"
+        },
+        "regularMarket": {
+          "startTime": "2026-07-13T09:00:00+09:00",
+          "singlePriceAuctionStartTime": "2026-07-13T15:20:00+09:00",
+          "endTime": "2026-07-13T15:30:00+09:00"
+        },
+        "afterMarket": {
+          "startTime": "2026-07-13T15:30:00+09:00",
+          "singlePriceAuctionEndTime": "2026-07-13T15:40:00+09:00",
+          "endTime": "2026-07-13T20:00:00+09:00"
+        }
+      }
+    },
+    "previousBusinessDay": { "date": "2026-07-10", "integrated": null },
+    "nextBusinessDay": { "date": "2026-07-14", "integrated": null }
+  },
+  "usMarketCalendar": {
+    "today": {
+      "date": "2026-07-12",
+      "dayMarket": null,
+      "preMarket": null,
+      "regularMarket": null,
+      "afterMarket": null
+    },
+    "previousBusinessDay": {
+      "date": "2026-07-11",
+      "dayMarket": null,
+      "preMarket": null,
+      "regularMarket": null,
+      "afterMarket": null
+    },
+    "nextBusinessDay": {
+      "date": "2026-07-13",
+      "dayMarket": null,
+      "preMarket": null,
+      "regularMarket": null,
+      "afterMarket": null
+    }
+  }
 }

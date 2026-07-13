@@ -1,16 +1,14 @@
-{
-  "TEST": {
+[
+  {
     "symbol": "TEST",
+    "timestamp": "2026-07-13T09:30:00.123+09:00",
     "lastPrice": "10.10",
-    "change": "0.15",
-    "changeRate": "0.0151",
-    "asOf": "2026-07-13T09:30:00+09:00"
+    "currency": "USD"
   },
-  "SNTZ": {
+  {
     "symbol": "SNTZ",
+    "timestamp": "2026-07-13T09:30:00.123+09:00",
     "lastPrice": "52000",
-    "change": "-500",
-    "changeRate": "-0.0095",
-    "asOf": "2026-07-13T09:30:00+09:00"
+    "currency": "KRW"
   }
-}
+]
