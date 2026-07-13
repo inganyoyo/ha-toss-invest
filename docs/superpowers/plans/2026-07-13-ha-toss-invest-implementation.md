@@ -516,9 +516,11 @@ git commit -m "feat: coordinate portfolio and market refreshes"
 ### Task 6B: Advanced Read-only Data Coordinators
 
 **Files:**
+- Modify: `custom_components/toss_invest/__init__.py`
 - Modify: `custom_components/toss_invest/coordinator.py`
 - Modify: `custom_components/toss_invest/api/client.py` only where a missing read-only endpoint wrapper is required
 - Create: `tests/test_advanced_coordinator.py`
+- Modify: `tests/test_init.py`
 - Modify: `tests/api/test_client.py` only for a new read-only wrapper
 
 **Interfaces:**
@@ -543,7 +545,7 @@ Advanced groups are nonessential during initial setup: a transient failure marks
 Run focused/full pytest, Ruff, and mypy. Review the canonical OpenAPI endpoint names, query bounds, and read-only safety before merge.
 
 ```bash
-git add custom_components/toss_invest/coordinator.py custom_components/toss_invest/api/client.py tests/test_advanced_coordinator.py tests/api/test_client.py
+git add custom_components/toss_invest/__init__.py custom_components/toss_invest/coordinator.py custom_components/toss_invest/api/client.py tests/test_advanced_coordinator.py tests/test_init.py tests/api/test_client.py
 git commit -m "feat: coordinate advanced investment context"
 ```
 
