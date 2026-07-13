@@ -3,9 +3,12 @@ from __future__ import annotations
 from collections.abc import Iterator
 from pathlib import Path
 import re
+import shutil
+import subprocess
 from types import SimpleNamespace
 from typing import Any
 
+import pytest
 import yaml  # type: ignore[import-untyped]
 from homeassistant.components.automation.config import (
     AUTOMATION_BLUEPRINT_SCHEMA,
@@ -246,6 +249,54 @@ def test_enhanced_dashboard_javascript_fails_safe_while_states_are_loading() -> 
     assert "price?.attributes.unit_of_measurement" not in text
     assert "entity?.attributes?.candles ?? []" in text
     assert "entity.attributes.candles" not in text
+
+
+def test_every_enhanced_monetary_javascript_template_masks_before_states_load() -> None:
+    text = _dashboard_text("toss-invest-enhanced.yaml")
+    snippets = re.findall(r"\[\[\[\s*(.*?)\s*\]\]\]", text, flags=re.DOTALL)
+    monetary = [
+        snippet for snippet in snippets if "switch.toss_invest_portfolio_privacy_mode" in snippet
+    ]
+
+    assert len(snippets) == 5
+    assert len(monetary) == 4
+    for snippet in snippets:
+        assert "states['switch.toss_invest_portfolio_privacy_mode'].state" not in snippet
+        assert re.search(r"\bentity\.state\b", snippet) is None
+        assert re.search(r"\bentity\.attributes\b", snippet) is None
+        assert re.search(r"\bprice\.attributes\b", snippet) is None
+    for snippet in monetary:
+        assert "?.state !== 'off'" in snippet
+
+    if shutil.which("node") is None:
+        pytest.skip("Node.js is not installed")
+    for snippet in monetary:
+        program = f"""
+const states = {{}};
+const entity = {{
+  entity_id: 'sensor.example_market_value',
+  state: '123456789',
+  attributes: {{unit_of_measurement: 'KRW'}},
+}};
+const output = (() => {{ {snippet} }})();
+if (!String(output).includes('••••')) {{
+  throw new Error(`unmasked monetary output: ${{output}}`);
+}}
+"""
+        subprocess.run(["node"], input=program, text=True, check=True, capture_output=True)
+
+
+def test_every_enhanced_data_generator_has_loading_safe_entity_attributes() -> None:
+    dashboard = _load(DASHBOARDS / "toss-invest-enhanced.yaml")
+    generators = [
+        node["data_generator"]
+        for node in _walk(dashboard)
+        if isinstance(node, dict) and "data_generator" in node
+    ]
+
+    assert len(generators) == 1
+    assert "entity?.attributes?.candles ?? []" in generators[0]
+    assert "entity.attributes" not in generators[0]
 
 
 async def test_blueprint_validates_with_home_assistant_and_substitutes_required_inputs(

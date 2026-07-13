@@ -9,4 +9,16 @@ services:
       - ../custom_components/toss_invest:/config/custom_components/toss_invest
     ports:
       - "8123:8123"
+    healthcheck:
+      test:
+        - CMD
+        - python3
+        - -c
+        - >-
+          import urllib.request;
+          urllib.request.urlopen('http://localhost:8123/', timeout=4).close()
+      start_period: 30s
+      interval: 10s
+      timeout: 5s
+      retries: 6
     restart: unless-stopped

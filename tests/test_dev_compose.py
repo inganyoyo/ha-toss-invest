@@ -14,7 +14,11 @@ ROOT = Path(__file__).parents[1]
 COMPOSE = ROOT / "dev" / "compose.yaml"
 
 
-def _normalized_compose(*, secrets_source: str | None = None) -> dict[str, object]:
+def _normalized_compose(
+    *,
+    secrets_source: str | None = None,
+    cwd: Path = ROOT,
+) -> dict[str, object]:
     if shutil.which("docker") is None:
         pytest.skip("Docker Compose is not installed")
 
@@ -24,8 +28,8 @@ def _normalized_compose(*, secrets_source: str | None = None) -> dict[str, objec
         environment["TOSS_INVEST_DEV_SECRETS"] = secrets_source
 
     result = subprocess.run(
-        ["docker", "compose", "-f", str(COMPOSE), "config", "--format", "json"],
-        cwd=ROOT,
+        ["docker", "compose", "-f", str(COMPOSE.relative_to(cwd)), "config", "--format", "json"],
+        cwd=cwd,
         env=environment,
         check=True,
         capture_output=True,
@@ -53,10 +57,11 @@ def _home_assistant_volumes(document: dict[str, object]) -> list[dict[str, objec
         ("./secrets.yaml", ROOT / "dev" / "secrets.yaml"),
     ),
 )
+@pytest.mark.parametrize("cwd", (ROOT, ROOT / "dev"))
 def test_compose_normalizes_default_and_override_secrets_without_target_overlap(
-    override: str | None, expected_source: Path
+    override: str | None, expected_source: Path, cwd: Path
 ) -> None:
-    volumes = _home_assistant_volumes(_normalized_compose(secrets_source=override))
+    volumes = _home_assistant_volumes(_normalized_compose(secrets_source=override, cwd=cwd))
     secrets = [volume for volume in volumes if volume["target"] == "/config/secrets.yaml"]
 
     assert len(secrets) == 1
@@ -80,6 +85,29 @@ def test_dev_compose_persists_only_home_assistant_storage() -> None:
 
     assert len(storage) == 1
     assert Path(str(storage[0]["source"])) == ROOT / "dev" / "config" / ".storage"
+
+
+def test_dev_compose_healthcheck_uses_image_python_and_local_home_assistant() -> None:
+    document = _normalized_compose()
+    services = document["services"]
+    assert isinstance(services, dict)
+    home_assistant = services["homeassistant"]
+    assert isinstance(home_assistant, dict)
+    healthcheck = home_assistant["healthcheck"]
+    assert isinstance(healthcheck, dict)
+
+    command = healthcheck["test"]
+    assert isinstance(command, list)
+    assert command[:3] == ["CMD", "python3", "-c"]
+    assert "urllib.request" in str(command[3])
+    assert "http://localhost:8123/" in str(command[3])
+    assert healthcheck == {
+        "test": command,
+        "timeout": "5s",
+        "interval": "10s",
+        "retries": 6,
+        "start_period": "30s",
+    }
 
 
 def test_dev_readme_documents_exact_secrets_override_invocation() -> None:
