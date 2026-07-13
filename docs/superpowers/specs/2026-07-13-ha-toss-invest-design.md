@@ -32,6 +32,7 @@ The project will be published as the public GitHub repository `inganyoyo/ha-toss
 
 - Production Home Assistant: `2026.7.2`
 - Development host: macOS with Docker 29.6.1 and Docker Compose 5.2.0
+- Python runtime: 3.14 or newer, required by Home Assistant 2026.7.2
 - Existing dashboard: five views (`홈`, `전기`, `시스템`, `차량`, `로또`)
 - New view: sixth view named `Toss 주식`
 - Existing visual language: rounded cards, restrained glow, dark and light themes

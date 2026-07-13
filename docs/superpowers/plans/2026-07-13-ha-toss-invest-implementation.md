@@ -6,12 +6,13 @@
 
 **Architecture:** A typed async Toss API client feeds independent Home Assistant coordinators for holdings, prices, candles, and market context. Native entities expose stable essential data, optional advanced metrics, privacy and refresh controls, and alert events; dashboard YAML consumes those entities without coupling the API layer to frontend cards.
 
-**Tech Stack:** Python 3.13, Home Assistant 2026.7.2, aiohttp, pytest-homeassistant-custom-component, Ruff, mypy, Docker Compose, HACS validation, Hassfest, Lovelace YAML, GitHub Actions.
+**Tech Stack:** Python 3.14, Home Assistant 2026.7.2, aiohttp, pytest-homeassistant-custom-component, Ruff, mypy, Docker Compose, HACS validation, Hassfest, Lovelace YAML, GitHub Actions.
 
 ## Global Constraints
 
 - Domain and package name: `toss_invest`.
 - Production compatibility floor: Home Assistant `2026.7.2`.
+- Python compatibility floor: `>=3.14`, matching Home Assistant 2026.7.2.
 - Repository: public `inganyoyo/ha-toss-invest`, one directory under `custom_components/`.
 - Version 1 is read-only: do not implement order mutation, order history, or conditional-order endpoints.
 - Buying power is optional and read-only.
@@ -113,7 +114,7 @@ DEFAULT_REFERENCE_INTERVAL = timedelta(minutes=30)
 }
 ```
 
-Create `pyproject.toml` with Python `>=3.13`, pytest, pytest-asyncio, pytest-homeassistant-custom-component, aioresponses, Ruff, and mypy; configure Ruff line length 100 and pytest `asyncio_mode = "auto"`. Create Compose service `homeassistant` using `ghcr.io/home-assistant/home-assistant:2026.7.2`, bind-mount `../custom_components/toss_invest`, and expose `8123:8123`. Ignore `.venv`, `.pytest_cache`, `.mypy_cache`, `dev/config`, `.env`, and secrets.
+Create `pyproject.toml` with Python `>=3.14`, pytest, pytest-asyncio, pytest-homeassistant-custom-component, aioresponses, Ruff, and mypy; configure Ruff line length 100 and pytest `asyncio_mode = "auto"`. Create Compose service `homeassistant` using `ghcr.io/home-assistant/home-assistant:2026.7.2`, bind-mount `../custom_components/toss_invest`, and expose `8123:8123`. Ignore `.venv`, `.pytest_cache`, `.mypy_cache`, `dev/config`, `.env`, and secrets.
 
 - [ ] **Step 4: Verify package and container configuration**
 
