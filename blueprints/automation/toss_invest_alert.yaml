@@ -1,0 +1,48 @@
+blueprint:
+  name: Toss Invest 알림 라우팅
+  description: >-
+    Toss Invest EventEntity의 상태 변경을 받아 안전한 이벤트 정보만 사용자 지정 동작에
+    전달합니다. action 안에서 event_type과 alert_payload 변수를 사용할 수 있습니다.
+  domain: automation
+  input:
+    event_entity:
+      name: Toss Invest 알림 이벤트 엔티티
+      description: 통합이 만든 event.toss_invest_portfolio_alert 엔티티를 선택하세요.
+      selector:
+        entity:
+          filter:
+            - domain: event
+    action:
+      name: 알림 동작
+      description: 모바일 알림, persistent_notification 등 실행할 동작을 지정하세요.
+      selector:
+        action: {}
+
+triggers:
+  - trigger: state
+    entity_id: !input event_entity
+
+variables:
+  event_type: >-
+    {{ trigger.to_state.attributes.get('event_type', 'unknown')
+       if trigger.to_state is not none else 'unknown' }}
+  alert_payload:
+    event_type: "{{ event_type }}"
+    symbol: >-
+      {{ trigger.to_state.attributes.get('symbol', '')
+         if trigger.to_state is not none else '' }}
+    severity: >-
+      {{ trigger.to_state.attributes.get('severity', '')
+         if trigger.to_state is not none else '' }}
+    source_timestamp: >-
+      {{ trigger.to_state.attributes.get('source_timestamp', '')
+         if trigger.to_state is not none else '' }}
+
+conditions:
+  - condition: template
+    value_template: >-
+      {{ trigger.to_state is not none
+         and trigger.to_state.attributes.get('event_type') is not none }}
+actions: !input action
+mode: queued
+max: 10
