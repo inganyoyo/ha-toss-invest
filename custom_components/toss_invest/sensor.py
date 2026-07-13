@@ -27,7 +27,7 @@ from .calculations import (
 )
 from .coordinator import TossInvestRuntimeData
 from .entity import TossInvestEntity
-from .market_entities import build_market_entities
+from .market_entities import build_market_entities, remove_ranking_registry_entries
 from .models import Candle, Holding, HoldingsOverview
 
 type Value = Decimal | str | datetime | int | None
@@ -349,6 +349,7 @@ async def async_setup_entry(
 ) -> None:
     """Set up account sensors and reconcile newly discovered holdings."""
     runtime = entry.runtime_data
+    remove_ranking_registry_entries(hass, entry)
     buying_power_enabled = bool(entry.options.get("enable_buying_power", False))
     async_add_entities(
         TossAccountSensor(runtime, entry.entry_id, description)

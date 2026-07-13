@@ -1,12 +1,15 @@
 from __future__ import annotations
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
+from homeassistant.config_entries import ConfigEntryState
+from homeassistant.const import PERCENTAGE
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 
 from custom_components.toss_invest.const import DOMAIN
 from custom_components.toss_invest.coordinator import KOREAN_MARKET_INDICATORS
 from custom_components.toss_invest.market_entities import (
+    MARKET_INDICATOR_DESCRIPTIONS,
     TossInvestorNetSensor,
     TossMarketIndicatorSensor,
     TossRankingSensor,
@@ -59,6 +62,13 @@ async def test_market_indicators_have_stable_values_defaults_and_device(hass) ->
     kosdaq = hass.states.get("sensor.toss_invest_portfolio_market_indicator_kosdaq")
     assert kospi is not None and kospi.state == "100"
     assert kosdaq is not None and kosdaq.state == "101"
+    assert kospi.attributes["unit_of_measurement"] == "points"
+    assert kosdaq.attributes["unit_of_measurement"] == "points"
+    units = {
+        description.symbol: description.native_unit_of_measurement
+        for description in MARKET_INDICATOR_DESCRIPTIONS
+    }
+    assert all(units[symbol] == PERCENTAGE for symbol in KOREAN_MARKET_INDICATORS[2:])
 
     for index, symbol in enumerate(KOREAN_MARKET_INDICATORS):
         entity_id = f"sensor.toss_invest_portfolio_market_indicator_{symbol.lower()}"
@@ -76,10 +86,17 @@ async def test_market_indicators_have_stable_values_defaults_and_device(hass) ->
         identifiers={(DOMAIN, f"{entry.entry_id}:portfolio")}
     )
     assert portfolio is not None
+    indicator_entry = registry.async_get("sensor.toss_invest_portfolio_market_indicator_kospi")
+    assert indicator_entry is not None and indicator_entry.device_id == portfolio.id
 
 
 async def test_investor_net_uses_latest_record_decimal_and_krw_metadata(hass) -> None:
-    await setup_integration(hass, market_api())
+    entry = await setup_integration(hass, market_api())
+    registry = er.async_get(hass)
+    portfolio = dr.async_get(hass).async_get_device(
+        identifiers={(DOMAIN, f"{entry.entry_id}:portfolio")}
+    )
+    assert portfolio is not None
 
     expected = {
         "individual": "110",
@@ -93,6 +110,10 @@ async def test_investor_net_uses_latest_record_decimal_and_krw_metadata(hass) ->
             assert state is not None and state.state == value
             assert state.attributes["device_class"] == "monetary"
             assert state.attributes["unit_of_measurement"] == "KRW"
+            registry_entry = registry.async_get(
+                f"sensor.toss_invest_portfolio_{market}_{investor}_net"
+            )
+            assert registry_entry is not None and registry_entry.device_id == portfolio.id
 
 
 async def test_market_entities_are_unavailable_only_for_market_context_staleness(hass) -> None:
@@ -229,3 +250,83 @@ async def test_empty_ranking_has_unknown_state_and_ranked_at(hass) -> None:
 
     assert ranking.native_value is None
     assert ranking.extra_state_attributes == {"ranked_at": None, "rankings": []}
+
+
+async def test_ranking_option_reload_registered_state_staleness_and_unload(hass) -> None:
+    client = market_api()
+    client.async_get_rankings.side_effect = lambda **kwargs: {
+        "rankedAt": "2026-07-13T15:30:00+09:00",
+        "rankings": [
+            {
+                "rank": 1,
+                "symbol": f"{kwargs['market_country']}-LEADER",
+                "currency": "KRW" if kwargs["market_country"] == "KR" else "USD",
+                "price": {
+                    "lastPrice": "101.25",
+                    "basePrice": "100",
+                    "changeRate": "0.0125",
+                },
+                "tradingVolume": "1234.5",
+                "tradingAmount": "987654.25",
+            }
+        ],
+    }
+    entry = await setup_integration(hass, client)
+    entity_id = "sensor.toss_invest_portfolio_kr_top_gainers"
+    registry = er.async_get(hass)
+    assert registry.async_get(entity_id) is None
+
+    with (
+        patch("custom_components.toss_invest.TossInvestClient", return_value=client),
+        patch("custom_components.toss_invest.PLATFORMS", ["sensor", "binary_sensor"]),
+    ):
+        hass.config_entries.async_update_entry(entry, options={"enable_rankings": True})
+        await hass.async_block_till_done()
+    assert entry.state is ConfigEntryState.LOADED
+    registry_entry = registry.async_get(entity_id)
+    assert registry_entry is not None
+    assert registry_entry.disabled_by is er.RegistryEntryDisabler.INTEGRATION
+    assert hass.states.get(entity_id) is None
+
+    registry.async_update_entity(entity_id, disabled_by=None)
+    with (
+        patch("custom_components.toss_invest.TossInvestClient", return_value=client),
+        patch("custom_components.toss_invest.PLATFORMS", ["sensor", "binary_sensor"]),
+    ):
+        assert await hass.config_entries.async_reload(entry.entry_id)
+        await hass.async_block_till_done()
+    state = hass.states.get(entity_id)
+    assert state is not None and state.state == "KR-LEADER"
+    assert state.attributes["ranked_at"] == "2026-07-13T15:30:00+09:00"
+    assert state.attributes["rankings"][0]["last_price"] == "101.25"
+    portfolio = dr.async_get(hass).async_get_device(
+        identifiers={(DOMAIN, f"{entry.entry_id}:portfolio")}
+    )
+    assert portfolio is not None
+    ranking_entry = registry.async_get(entity_id)
+    assert ranking_entry is not None and ranking_entry.device_id == portfolio.id
+
+    entry.runtime_data.stale_groups.add("rankings")
+    entry.runtime_data.rankings.async_update_listeners()
+    await hass.async_block_till_done()
+    assert hass.states.get(entity_id).state == "unavailable"
+    assert hass.states.get("sensor.toss_invest_portfolio_market_indicator_kospi").state == "100"
+
+    entry.runtime_data.stale_groups.remove("rankings")
+    entry.runtime_data.rankings.async_update_listeners()
+    await hass.async_block_till_done()
+    assert hass.states.get(entity_id).state == "KR-LEADER"
+
+    with (
+        patch("custom_components.toss_invest.TossInvestClient", return_value=client),
+        patch("custom_components.toss_invest.PLATFORMS", ["sensor", "binary_sensor"]),
+    ):
+        hass.config_entries.async_update_entry(entry, options={"enable_rankings": False})
+        await hass.async_block_till_done()
+    assert entry.state is ConfigEntryState.LOADED
+    assert hass.states.get(entity_id) is None
+
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert entry.state is ConfigEntryState.NOT_LOADED
+    assert registry.async_get(entity_id) is None
