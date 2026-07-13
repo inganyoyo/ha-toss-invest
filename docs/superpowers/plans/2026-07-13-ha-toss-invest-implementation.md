@@ -513,6 +513,40 @@ git add custom_components/toss_invest/__init__.py custom_components/toss_invest/
 git commit -m "feat: coordinate portfolio and market refreshes"
 ```
 
+### Task 6B: Advanced Read-only Data Coordinators
+
+**Files:**
+- Modify: `custom_components/toss_invest/coordinator.py`
+- Modify: `custom_components/toss_invest/api/client.py` only where a missing read-only endpoint wrapper is required
+- Create: `tests/test_advanced_coordinator.py`
+- Modify: `tests/api/test_client.py` only for a new read-only wrapper
+
+**Interfaces:**
+- Extends `TossInvestRuntimeData` with independent candle, warning, buying-power, market-context, and ranking coordinators.
+- Produces Decimal-safe candle history and buying power, parsed warning records, market indicators/investor flows, and bounded KR/US ranking snapshots.
+- Every group preserves last-good data and maintains its own `last_success`/`stale_groups` state.
+
+- [ ] **Step 1: Test useful-source coverage and failure isolation**
+
+Cover dynamic holding symbols; no API calls for empty holdings; warning and candle failures isolated from essential holdings/prices; optional buying-power/ranking groups disabled without calls; KRW/USD buying power; KOSPI/KOSDAQ indicators and investor trading; KR/US market amount, gainers, and losers rankings.
+
+- [ ] **Step 2: Implement bounded, rate-safe advanced refreshes**
+
+Use the reference interval for candles, warnings, market context, and rankings, and the holdings interval for buying power. Fetch per-symbol sources with bounded concurrency. Daily candle lookback supports 20–500 trading days by paging the official endpoint in chunks of at most 200, stopping on an empty page, missing/repeated `nextBefore`, or the requested limit. Deduplicate candles by timestamp and preserve newest-first source order.
+
+Warnings and candles are always available for active holdings. Buying power and rankings honor `enable_buying_power` and `enable_rankings`. Rankings request a bounded top 10 for market trading amount, 1-day gainers, and 1-day losers for each of KR and US. Market context includes all eight official Korean indicator symbols plus KOSPI/KOSDAQ daily investor flows. All calls remain GET-only.
+
+Advanced groups are nonessential during initial setup: a transient failure marks only that group stale and does not block the essential holdings/reference/price setup. Permanent authentication failures still trigger Home Assistant reauthentication.
+
+- [ ] **Step 3: Verify and commit**
+
+Run focused/full pytest, Ruff, and mypy. Review the canonical OpenAPI endpoint names, query bounds, and read-only safety before merge.
+
+```bash
+git add custom_components/toss_invest/coordinator.py custom_components/toss_invest/api/client.py tests/test_advanced_coordinator.py tests/api/test_client.py
+git commit -m "feat: coordinate advanced investment context"
+```
+
 ### Task 7: Account and Holding Entities
 
 **Files:**
