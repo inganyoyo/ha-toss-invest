@@ -71,6 +71,15 @@ ruff format --check .
 mypy custom_components/toss_invest
 ```
 
+## Release maintenance
+
+HACS validation currently uses `ignore: brands` **only** while this project is distributed as a
+custom repository. This temporary exception **MUST be removed** after the integration is registered
+in `home-assistant/brands`. Dependabot checks SHA-pinned GitHub Actions weekly. On the same weekly
+maintenance cadence, maintainers must manually compare and deliberately update the inline Python
+compatibility-tool pins. Review each change separately so failures remain attributable to Home
+Assistant or to a known tooling update.
+
 ## 문서
 
 - [Configuration and entity defaults](docs/configuration.md)

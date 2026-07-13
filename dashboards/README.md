@@ -69,9 +69,9 @@ toss-card-glow: "0 4px 18px rgba(0, 0, 0, 0.18)"
 `blueprints/automation/toss_invest_alert.yaml`을 automation blueprint 경로에 복사한 뒤
 `event.toss_invest_portfolio_alert`와 실행할 action을 선택합니다. action에서는
 `event_type`과 `alert_payload`의 `symbol`, `severity`, `source_timestamp`, `observed`,
-`threshold`를 사용할 수 있습니다. `observed`와 `threshold`는 EventEntity가 개인정보
-정책에 따라 허용했을 때만 값이 있고, 그 외에는 `None`입니다. 인증정보와 계좌 식별자는
-전달하지 않습니다.
+`threshold`를 사용할 수 있습니다. 비금액 경고에는 해당 관측값과 임계값이 전달되지만,
+금액 경고의 `observed`와 `threshold`는 항상 생략되어 `None`입니다. 인증정보와 계좌
+식별자도 전달하지 않습니다.
 
 ## 개발 검증
 

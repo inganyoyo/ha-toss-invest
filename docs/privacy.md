@@ -31,9 +31,9 @@ fail-safe로 금액을 가리지만 이것도 접근 제어는 아닙니다.
 
 ## Alerts
 
-`include_monetary_alert_payloads` 기본값은 false입니다. false이면 monetary alert의
-`observed`와 `threshold`를 event payload에서 제거합니다. true이면 automation trace,
-notification 및 logbook으로 값이 전파될 수 있습니다. blueprint는 없는 값을 `None`으로
-전달합니다. 민감한 notification 대상과 automation trace 보존 기간을 함께 검토하세요.
+Monetary alert의 `observed`와 `threshold`는 event payload에서 **always omitted**이며 이를
+활성화하는 사용자 옵션은 없습니다. blueprint는 없는 값을 `None`으로 전달합니다. 향후
+payload 정책이 바뀌더라도 notification 대상과 automation trace 보존 기간을 함께 검토해야
+합니다.
 
 Recorder 최소화 예시는 [recorder.md](recorder.md)를 참고하세요.

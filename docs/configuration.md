@@ -5,8 +5,8 @@
 Home Assistant에서 **Settings > Devices & services > Add integration > Toss Invest**를
 선택합니다. 첫 단계에 Toss Open API `client_id`와 `client_secret`을 입력하면 인증을
 검증하고, 다음 단계에서 조회 전용으로 사용할 `account_seq`를 선택합니다. 같은 client와
-계좌 조합은 한 번만 추가할 수 있습니다. 자격 증명이 만료되거나 폐기되면 integration의
-Repair/Reconfigure 안내를 통해 재인증합니다.
+계좌 조합은 한 번만 추가할 수 있습니다. 자격 증명이 만료되거나 폐기되면 integration이
+표시하는 reauthentication flow에 새 자격 증명을 입력합니다.
 
 설정은 UI Config Flow 전용입니다. `configuration.yaml`에 OAuth 값을 넣지 마세요.
 
@@ -25,15 +25,8 @@ Repair/Reconfigure 안내를 통해 재인증합니다.
 | `max_retries` | 3 | 0–5 | 일시적 실패 재시도 횟수 |
 | `request_timeout` | 10 | 5–60 | 요청 timeout |
 | `enable_manual_refresh` | true | boolean | Refresh button 생성 |
-| `enable_krw_conversion` | true | boolean | USD 평가액의 KRW 환산 계산 |
 | `enable_buying_power` | false | boolean | 계좌의 매수 가능 금액 조회 및 entity 생성 |
 | `enable_rankings` | false | boolean | KR/US 거래대금·상승·하락 순위 조회 및 entity 생성 |
-| `gain_color` | `[211,47,47]` | RGB 0–255 | 상승 색상 |
-| `loss_color` | `[25,118,210]` | RGB 0–255 | 하락 색상 |
-| `neutral_color` | `[158,158,158]` | RGB 0–255 | 중립 색상 |
-| `border_color` | `[158,158,158]` | RGB 0–255 | 카드 테두리 색상 |
-| `glow_color` | `[255,193,7]` | RGB 0–255 | 강조 색상 |
-| `include_monetary_alert_payloads` | false | boolean | 금액 경고의 observed/threshold 포함 |
 | `alert_cooldown` | 3600 | 60–86400 | 활성 경고 반복 대기시간 |
 | `stock_warning_alerts_enabled` | true | boolean | Toss 종목 경고 알림 |
 | `stale_data_alerts_enabled` | true | boolean | 데이터 지연 알림 |
@@ -48,6 +41,12 @@ Repair/Reconfigure 안내를 통해 재인증합니다.
 
 `unset`인 수치 임계값은 해당 alert를 생성하지 않습니다. 옵션 저장 시 config entry가
 reload되며, 선택 기능을 끄면 관련 optional entity도 제거될 수 있습니다.
+
+**FX normalization is always enabled** for mixed-currency allocation and concentration
+calculations; it is not a user option. Dashboard colors are presentation settings configured only
+through the `toss-gain-color`, `toss-loss-color`, `toss-neutral-color`,
+`toss-card-border-color`, and `toss-card-glow` **Lovelace theme variables** described in the
+[dashboard guide](../dashboards/README.md).
 
 ## Entity defaults
 
@@ -76,6 +75,6 @@ integration이 Recorder 미기록 속성으로 표시하지만, 환경에 맞는
 `event.toss_invest_portfolio_alert`는 `daily_move`, `total_return`, `portfolio_daily`,
 `near_high`, `near_low`, `drawdown`, `volume_spike`, `stock_warning`, `stale_data`,
 `api_failure` event type을 사용합니다. payload에는 `symbol`, `severity`,
-`source_timestamp`가 있고 허용된 경우 `observed`, `threshold`가 추가됩니다. OAuth 값과
-`account_seq`는 포함하지 않습니다. 제공 blueprint 사용법은
+`source_timestamp`가 있습니다. 금액 경고의 `observed`, `threshold`는 항상 생략됩니다.
+OAuth 값과 `account_seq`도 포함하지 않습니다. 제공 blueprint 사용법은
 [dashboard guide](../dashboards/README.md)를 참고하세요.

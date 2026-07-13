@@ -11,8 +11,8 @@ jobs:
   quality:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6.0.2
-      - uses: actions/setup-python@v6.2.0
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: "3.14"
           cache: pip
@@ -25,40 +25,36 @@ jobs:
       - name: Require tag and manifest versions to match
         env:
           RELEASE_TAG: ${{ github.ref_name }}
-        run: |
-          python - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-
-          version = json.loads(
-              Path("custom_components/toss_invest/manifest.json").read_text()
-          )["version"]
-          tag = os.environ["RELEASE_TAG"]
-          if tag != f"v{version}":
-              raise SystemExit(f"tag {tag!r} does not match manifest version v{version}")
-          PY
+        run: >-
+          python .github/scripts/validate_release_tag.py
+          "$RELEASE_TAG" custom_components/toss_invest/manifest.json
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: home-assistant/actions/hassfest@master
       - uses: hacs/action@main
         with:
           category: integration
+          # Temporary for custom-repository development only. MUST remove this
+          # ignore after official home-assistant/brands registration.
+          ignore: brands
   publish:
     needs: [quality, validate]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.14"
       - name: Build the HACS archive
-        run: |
-          cd custom_components/toss_invest
-          zip -r ../../toss_invest.zip .
+        run: >-
+          python .github/scripts/build_release.py
+          custom_components/toss_invest toss_invest.zip
       - name: Publish GitHub release
-        uses: softprops/action-gh-release@v3.0.0
+        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
           files: toss_invest.zip
           generate_release_notes: true

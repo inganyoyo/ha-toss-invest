@@ -12,7 +12,7 @@ jobs:
   latest-stable:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6.0.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Test against latest stable Home Assistant
         run: |
           docker run --rm \
@@ -20,10 +20,19 @@ jobs:
             -w /work \
             ghcr.io/home-assistant/home-assistant:stable \
             bash -ceu '
+              STABLE_HA_VERSION="$(python -c "import importlib.metadata as m; print(m.version(\"homeassistant\"))")"
+              printf "homeassistant==%s\n" "$STABLE_HA_VERSION" > /tmp/stable-ha-constraint.txt
               python -m venv --system-site-packages /tmp/toss-invest-test
               /tmp/toss-invest-test/bin/python -m pip install \
-                pytest pytest-asyncio pytest-homeassistant-custom-component \
-                aioresponses ruff mypy
+                --constraint /tmp/stable-ha-constraint.txt \
+                pytest==9.0.3 pytest-asyncio==1.4.0 \
+                pytest-homeassistant-custom-component==0.13.346 \
+                aioresponses==0.7.9 ruff==0.15.21 mypy==2.3.0
+              INSTALLED_HA_VERSION="$(/tmp/toss-invest-test/bin/python -c "import importlib.metadata as m; print(m.version(\"homeassistant\"))")"
+              if [ "$INSTALLED_HA_VERSION" != "$STABLE_HA_VERSION" ]; then
+                echo "installed Home Assistant changed during test-tool setup" >&2
+                exit 1
+              fi
               /tmp/toss-invest-test/bin/pytest -q
               /tmp/toss-invest-test/bin/ruff check .
               /tmp/toss-invest-test/bin/ruff format --check .
