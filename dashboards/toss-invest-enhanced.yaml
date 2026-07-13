@@ -86,9 +86,9 @@ views:
                 title: 수익률 · 시장 · 갱신
                 entities:
                   - entity: sensor.toss_invest_portfolio_daily_return
-                    name: 오늘 수익률 (±%)
+                    name: 오늘 수익률 (%)
                   - entity: sensor.toss_invest_portfolio_total_return_after_cost
-                    name: 총 수익률 · 비용 반영 (±%)
+                    name: 총 수익률 · 비용 반영 (%)
                   - entity: sensor.toss_invest_portfolio_kr_market_status
                     name: 한국 시장
                   - entity: sensor.toss_invest_portfolio_us_market_status
@@ -98,8 +98,8 @@ views:
               - type: markdown
                 content: >-
                   금액 가리기는 화면 템플릿일 뿐 **권한 경계**가 아닙니다. 개발자 도구와
-                  엔티티 기록에서는 원본 금액을 볼 수 있습니다. 등락은 색상과 함께 `+`/`-`
-                  부호와 수치로 표시됩니다.
+                  엔티티 기록에서는 원본 금액을 볼 수 있습니다. 보유 종목 카드의 수익률은
+                  양수에 `+`를 붙이고 음수와 0은 원래 부호와 수치를 유지합니다.
 
           - type: vertical-stack
             view_layout:
@@ -162,9 +162,14 @@ views:
                           const price = states[id.replace('_market_value', '_current_price')];
                           const daily = states[id.replace('_market_value', '_daily_return')];
                           const total = states[id.replace('_market_value', '_total_return_after_cost')];
+                          const signed = (state) => {
+                            if (!state || ['unknown', 'unavailable'].includes(state.state)) return '—';
+                            const value = Number(state.state);
+                            return value > 0 ? `+${state.state}` : state.state;
+                          };
                           const money = hidden ? '••••' : `${entity.state} ${entity.attributes.unit_of_measurement || ''}`;
                           const current = hidden ? '••••' : `${price?.state ?? '—'} ${price?.attributes.unit_of_measurement ?? ''}`;
-                          return `${money}<br>현재가 ${current}<br>오늘 ${daily?.state ?? '—'}% · 총 ${total?.state ?? '—'}%`; ]]]
+                          return `${money}<br>현재가 ${current}<br>오늘 ${signed(daily)}% · 총 ${signed(total)}%`; ]]]
                         styles:
                           <<: *toss_card_styles
                           label:
@@ -358,7 +363,7 @@ views:
                 card_param: cards
                 filter:
                   include:
-                    - entity_id: sensor.toss_invest_portfolio_buying_power_*
+                    - entity_id: sensor.toss_invest_portfolio_*_buying_power
                       options:
                         type: custom:button-card
                         show_state: false

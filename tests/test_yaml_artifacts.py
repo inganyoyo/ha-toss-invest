@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from pathlib import Path
+import re
 from types import SimpleNamespace
 from typing import Any
 
@@ -13,6 +14,8 @@ from homeassistant.components.automation.config import (
 from homeassistant.components.blueprint.models import Blueprint, BlueprintInputs
 from homeassistant.core import State
 from homeassistant.helpers.template import Template
+from homeassistant.util import slugify
+
 from homeassistant.util.yaml.loader import load_yaml
 
 
@@ -49,6 +52,16 @@ def _walk(value: object) -> Iterator[object]:
 
 def _dashboard_text(name: str) -> str:
     return (DASHBOARDS / name).read_text(encoding="utf-8")
+
+
+def _account_entity_id(description_key: str) -> str:
+    """Derive an entity ID from the integration's device/name contract."""
+    sensor_source = (ROOT / "custom_components" / "toss_invest" / "sensor.py").read_text(
+        encoding="utf-8"
+    )
+    match = re.search(rf'_description\("{re.escape(description_key)}", "([^"]+)"', sensor_source)
+    assert match is not None
+    return f"sensor.{slugify('Toss Invest Portfolio')}_{slugify(match.group(1))}"
 
 
 def test_all_yaml_artifacts_parse_and_each_dashboard_is_one_insertable_view() -> None:
@@ -95,11 +108,17 @@ def test_native_dashboard_uses_only_native_cards_and_hides_missing_optional_enti
     assert text.count("button.toss_invest_portfolio_refresh") >= 2
     assert "state_not: unavailable" in text
     assert "state_not: unknown" in text
-    for buying_power in (
-        "sensor.toss_invest_portfolio_buying_power_krw",
-        "sensor.toss_invest_portfolio_buying_power_usd",
-    ):
+    buying_power_ids = {
+        _account_entity_id("buying_power_krw"),
+        _account_entity_id("buying_power_usd"),
+    }
+    assert buying_power_ids == {
+        "sensor.toss_invest_portfolio_krw_buying_power",
+        "sensor.toss_invest_portfolio_usd_buying_power",
+    }
+    for buying_power in buying_power_ids:
         assert buying_power in text
+    assert "sensor.toss_invest_portfolio_buying_power_" not in text
     assert "옵션 엔티티가 없으면 카드도 숨겨집니다" in text
 
 
@@ -204,6 +223,15 @@ def test_summary_holdings_market_and_risk_sections_have_required_signals() -> No
     ):
         assert signal in text
     assert "알림 임계값" in text
+
+
+def test_enhanced_holding_returns_prefix_positive_values_without_changing_others() -> None:
+    text = _dashboard_text("toss-invest-enhanced.yaml")
+    assert "const signed = (state)" in text
+    assert "value > 0 ? `+${state.state}` : state.state" in text
+    assert "오늘 ${signed(daily)}% · 총 ${signed(total)}%" in text
+    assert "sensor.toss_invest_portfolio_*_buying_power" in text
+    assert "sensor.toss_invest_portfolio_buying_power_*" not in text
 
 
 async def test_blueprint_validates_with_home_assistant_and_substitutes_required_inputs(

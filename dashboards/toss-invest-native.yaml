@@ -52,9 +52,9 @@ views:
             title: 수익률 · 시장 · 갱신
             entities:
               - entity: sensor.toss_invest_portfolio_daily_return
-                name: 오늘 수익률 (±%)
+                name: 오늘 수익률 (%)
               - entity: sensor.toss_invest_portfolio_total_return_after_cost
-                name: 총 수익률 · 비용 반영 (±%)
+                name: 총 수익률 · 비용 반영 (%)
               - entity: sensor.toss_invest_portfolio_kr_market_status
                 name: 한국 시장
               - entity: sensor.toss_invest_portfolio_us_market_status
@@ -123,14 +123,14 @@ views:
                 entity: switch.toss_invest_portfolio_privacy_mode
                 state: "off"
               - condition: state
-                entity: sensor.toss_invest_portfolio_buying_power_krw
+                entity: sensor.toss_invest_portfolio_krw_buying_power
                 state_not: unavailable
               - condition: state
-                entity: sensor.toss_invest_portfolio_buying_power_krw
+                entity: sensor.toss_invest_portfolio_krw_buying_power
                 state_not: unknown
             card:
               type: entity
-              entity: sensor.toss_invest_portfolio_buying_power_krw
+              entity: sensor.toss_invest_portfolio_krw_buying_power
               name: 원화 주문 가능 금액
           - type: conditional
             conditions:
@@ -138,14 +138,14 @@ views:
                 entity: switch.toss_invest_portfolio_privacy_mode
                 state: "off"
               - condition: state
-                entity: sensor.toss_invest_portfolio_buying_power_usd
+                entity: sensor.toss_invest_portfolio_usd_buying_power
                 state_not: unavailable
               - condition: state
-                entity: sensor.toss_invest_portfolio_buying_power_usd
+                entity: sensor.toss_invest_portfolio_usd_buying_power
                 state_not: unknown
             card:
               type: entity
-              entity: sensor.toss_invest_portfolio_buying_power_usd
+              entity: sensor.toss_invest_portfolio_usd_buying_power
               name: 달러 주문 가능 금액
           - type: markdown
             content: "선택 옵션 엔티티가 없으면 카드도 숨겨집니다. 채권 지표와 순위는 필요한 엔티티만 활성화해 추가하세요."
