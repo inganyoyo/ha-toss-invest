@@ -611,6 +611,65 @@ git add custom_components/toss_invest/entity.py custom_components/toss_invest/se
 git commit -m "feat: expose portfolio and holding entities"
 ```
 
+### Task 7C: Advanced Market Context Entity Surface
+
+**Files:**
+- Create: `custom_components/toss_invest/market_entities.py`
+- Modify: `custom_components/toss_invest/sensor.py`
+- Create: `tests/test_market_entities.py`
+
+**Interfaces:**
+- Consumes: `runtime.market_context.data: MarketContextSnapshot | None` and `runtime.rankings.data: dict[tuple[str, str], RankingSnapshot] | None` from Task 6B.
+- Produces: stable portfolio-device sensors for every official Korean indicator, latest KOSPI/KOSDAQ investor net amounts, and the six optional KR/US ranking snapshots required by the dashboard.
+
+- [ ] **Step 1: Write failing entity-contract tests**
+
+Test exact IDs and values for `sensor.toss_invest_portfolio_market_indicator_kospi`, `sensor.toss_invest_portfolio_market_indicator_kosdaq`, all six Korean bond symbols, and `sensor.toss_invest_portfolio_{kospi,kosdaq}_{individual,foreigner,institution,other_corporation}_net`. Assert investor net equals `buy_amount - sell_amount` as `Decimal`, uses KRW monetary metadata, and becomes unavailable only when `market_context` is stale.
+
+Test that ranking entities are absent when `enable_rankings` is false and, when true, create exactly these six stable IDs:
+
+```text
+sensor.toss_invest_portfolio_kr_market_trading_amount
+sensor.toss_invest_portfolio_kr_top_gainers
+sensor.toss_invest_portfolio_kr_top_losers
+sensor.toss_invest_portfolio_us_market_trading_amount
+sensor.toss_invest_portfolio_us_top_gainers
+sensor.toss_invest_portfolio_us_top_losers
+```
+
+Each ranking sensor state is the top symbol (or unknown for an empty ranking), attributes contain the source `ranked_at` and ordered top-10 rows, and the large `rankings` attribute is listed in `_unrecorded_attributes`.
+
+- [ ] **Step 2: Run the focused tests and verify RED**
+
+Run: `pytest tests/test_market_entities.py -q -p no:cacheprovider`
+Expected: FAIL because `market_entities.py` and the sensors do not exist.
+
+- [ ] **Step 3: Implement the bounded market entity module**
+
+Create immutable description tables in `market_entities.py`. Indicator and investor-flow entities use `dependency_groups = ("market_context",)`; ranking entities use `dependency_groups = ("rankings",)`. All entities reuse `TossInvestEntity` so IDs remain entry-ID based and account identifiers are never exposed. Preserve public market numeric data as `Decimal`. Ranking rows are converted to JSON-safe string attributes without logging or including private account data.
+
+Expose:
+
+```python
+def build_market_entities(
+    entry: ConfigEntry[TossInvestRuntimeData],
+) -> list[SensorEntity]:
+    """Build always-present market context and option-gated ranking entities."""
+```
+
+Call `build_market_entities(entry)` from `sensor.async_setup_entry`. Register KOSPI/KOSDAQ and investor-flow sensors enabled by default. Register bond indicators and ranking snapshots disabled by default to limit Recorder/UI growth; rankings are not registered at all unless `entry.options["enable_rankings"]` is true.
+
+- [ ] **Step 4: Verify entity lifecycle and quality**
+
+Run focused tests, full pytest, Ruff check/format, and mypy. Cover empty records/rankings, unknown public symbols, stale isolation, option reload compatibility, registry defaults, stable device link, and `_unrecorded_attributes`.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add custom_components/toss_invest/market_entities.py custom_components/toss_invest/sensor.py tests/test_market_entities.py
+git commit -m "feat: expose advanced market context entities"
+```
+
 ### Task 8: Privacy, Manual Refresh, and Alert Events
 
 **Files:**
