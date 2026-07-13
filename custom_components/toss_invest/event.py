@@ -83,9 +83,6 @@ class TossInvestAlertEvent(TossInvestEntity, EventEntity):
         options: dict[str, Any],
     ) -> None:
         super().__init__(runtime, entry_id)
-        self._include_monetary_payloads = bool(
-            options.get("include_monetary_alert_payloads", False)
-        )
         self._evaluator = AlertEvaluator(
             cooldown=timedelta(seconds=float(options.get("alert_cooldown", 3600))),
             enabled=_build_enabled(options),
@@ -178,7 +175,7 @@ class TossInvestAlertEvent(TossInvestEntity, EventEntity):
             "severity": str(alert.severity),
             "source_timestamp": alert.source_timestamp.isoformat(),
         }
-        if alert.monetary and not self._include_monetary_payloads:
+        if alert.monetary:
             payload.pop("observed")
             payload.pop("threshold")
         self._trigger_event(alert.type, payload)

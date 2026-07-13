@@ -66,7 +66,7 @@ async def test_event_payload_masks_money_and_never_contains_private_identifiers(
     assert "private-account-sequence" not in str(payload)
 
 
-async def test_event_payload_stringifies_explicitly_allowed_values(hass) -> None:
+async def test_event_payload_ignores_legacy_monetary_opt_in(hass) -> None:
     entry = await setup_integration(hass, api())
     entity = TossInvestAlertEvent(
         entry.runtime_data, entry.entry_id, {"include_monetary_alert_payloads": True}
@@ -77,9 +77,11 @@ async def test_event_payload_stringifies_explicitly_allowed_values(hass) -> None
     entity.async_emit(make_alert())
 
     payload = entity._trigger_event.call_args.args[1]
-    assert payload["observed"] == "123.45"
-    assert payload["threshold"] == "100"
-    assert all(isinstance(value, str) for value in payload.values())
+    assert payload == {
+        "symbol": "portfolio",
+        "severity": "warning",
+        "source_timestamp": "2026-07-13T12:00:00+00:00",
+    }
 
 
 async def test_event_setup_normalizes_percent_options_once_and_avoids_duplicates(hass) -> None:
