@@ -5,11 +5,16 @@ from pathlib import Path, PurePosixPath
 import yaml  # type: ignore[import-untyped]
 
 
-def test_dev_compose_mount_targets_do_not_overlap() -> None:
-    """Docker Desktop must not receive parent and child bind mount targets."""
+def _dev_mounts() -> dict[str, str]:
+    """Return container targets mapped to their Compose bind sources."""
     compose = yaml.safe_load(Path("dev/compose.yaml").read_text())
     volumes = compose["services"]["homeassistant"]["volumes"]
-    targets = [PurePosixPath(volume.rsplit(":", 2)[1]) for volume in volumes]
+    return {volume.split(":", 2)[1]: volume.split(":", 2)[0] for volume in volumes}
+
+
+def test_dev_compose_mount_targets_do_not_overlap() -> None:
+    """Docker Desktop must not receive parent and child bind mount targets."""
+    targets = [PurePosixPath(target) for target in _dev_mounts()]
 
     overlaps = {
         (str(parent), str(child))
@@ -19,4 +24,8 @@ def test_dev_compose_mount_targets_do_not_overlap() -> None:
     }
 
     assert not overlaps
-    assert PurePosixPath("/config/.storage") in targets
+
+
+def test_dev_compose_persists_only_home_assistant_storage() -> None:
+    """HA registry/auth state uses the matching host .storage directory."""
+    assert _dev_mounts()["/config/.storage"] == "./config/.storage"
