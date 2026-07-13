@@ -10,7 +10,7 @@ import sys
 import tomllib
 import zipfile
 
-import yaml
+import yaml  # type: ignore[import-untyped]
 
 ROOT = Path(__file__).parents[1]
 NO_OP_OPTIONS = {
