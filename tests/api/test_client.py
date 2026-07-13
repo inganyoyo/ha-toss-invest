@@ -33,6 +33,10 @@ class FakeResponse:
         self.headers: dict[str, str] = headers or {}
 
     async def json(self, content_type: Any = None) -> Any:
+        if self._payload == "RAISE_JSON_DECODE_ERROR":
+            import json
+
+            json.loads("{invalid}")
         return self._payload
 
     async def __aenter__(self) -> "FakeResponse":
@@ -542,3 +546,56 @@ async def test_source_has_no_mutation_endpoints_or_logged_secrets() -> None:
                             pytest.fail("auth.py has session.post call targeting unauthorized URL")
                     else:
                         pytest.fail(f"{path} has direct session mutation call: {method_name}")
+
+
+async def test_5xx_exits_context_before_sleep(monkeypatch: pytest.MonkeyPatch) -> None:
+    exited = False
+
+    class TrackExitResponse(FakeResponse):
+        async def __aexit__(self, *exc_info: Any) -> None:
+            nonlocal exited
+            exited = True
+            await super().__aexit__(*exc_info)
+
+    client, session = make_client(
+        [token_response(), TrackExitResponse(status=500), ok(load_fixture("accounts.json"))]
+    )
+
+    sleep_called_after_exit = False
+
+    async def mock_sleep(delay: float) -> None:
+        nonlocal sleep_called_after_exit
+        if exited:
+            sleep_called_after_exit = True
+
+    monkeypatch.setattr("custom_components.toss_invest.api.client.asyncio.sleep", mock_sleep)
+    monkeypatch.setattr("random.uniform", lambda a, b: b)
+
+    await client.async_get_accounts()
+    assert sleep_called_after_exit, "Response context was not exited before asyncio.sleep"
+
+
+async def test_client_genuine_json_decode_error_on_200_raises_api_error() -> None:
+    client, session = make_client(
+        [token_response(), FakeResponse(status=200, payload="RAISE_JSON_DECODE_ERROR")]
+    )
+    with pytest.raises(TossApiError) as excinfo:
+        await client.async_get_accounts()
+    assert excinfo.value.code == "api-error"
+
+
+async def test_client_genuine_json_decode_error_on_400_raises_api_error() -> None:
+    client, session = make_client(
+        [
+            token_response(),
+            FakeResponse(
+                status=400,
+                payload="RAISE_JSON_DECODE_ERROR",
+                headers={"X-Request-Id": "req-decode-fail"},
+            ),
+        ]
+    )
+    with pytest.raises(TossApiError) as excinfo:
+        await client.async_get_accounts()
+    assert excinfo.value.code == "api-error"
+    assert excinfo.value.request_id == "req-decode-fail"

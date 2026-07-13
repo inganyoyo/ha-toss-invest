@@ -162,3 +162,25 @@ async def test_parse_retry_after_negative() -> None:
     from custom_components.toss_invest.api.rate_limit import parse_retry_after
 
     assert parse_retry_after("-10", default=1.0) == 0.0
+
+
+@pytest.mark.parametrize("bad_val", ["inf", "-inf", "nan", "Infinity", "1e400"])
+async def test_retry_after_non_finite_values(
+    limiter: RateLimiter, clock: FakeClock, bad_val: str
+) -> None:
+    await limiter.async_update("STOCK", {"Retry-After": bad_val})
+    start = clock.now
+    await asyncio.wait_for(limiter.async_wait("STOCK"), timeout=1.0)
+    assert clock.now - start == pytest.approx(0.0)
+
+
+@pytest.mark.parametrize("bad_val", ["inf", "-inf", "nan", "Infinity", "1e400"])
+async def test_reset_non_finite_values(
+    limiter: RateLimiter, clock: FakeClock, bad_val: str
+) -> None:
+    await limiter.async_update(
+        "STOCK", {"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": bad_val}
+    )
+    start = clock.now
+    await asyncio.wait_for(limiter.async_wait("STOCK"), timeout=1.0)
+    assert clock.now - start == pytest.approx(0.0)

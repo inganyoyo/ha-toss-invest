@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from email.utils import parsedate_to_datetime
+import math
 import time
 from collections.abc import Callable, Mapping
 
@@ -36,7 +37,10 @@ def _parse_float(value: str | None) -> float | None:
     if value is None:
         return None
     try:
-        return float(value)
+        val = float(value)
+        if math.isfinite(val):
+            return val
+        return None
     except ValueError:
         return None
 
@@ -52,9 +56,11 @@ def parse_retry_after(
         return default
     try:
         val = float(val_str)
-        if val < 0:
-            return 0.0
-        return val
+        if math.isfinite(val):
+            if val < 0:
+                return 0.0
+            return val
+        return default
     except ValueError:
         pass
 
@@ -64,8 +70,10 @@ def parse_retry_after(
             dt_epoch = dt.timestamp()
             current_epoch = clock()
             delay = dt_epoch - current_epoch
-            return max(0.0, delay)
-    except Exception:
+            if math.isfinite(delay):
+                return max(0.0, delay)
+            return default
+    except ValueError, TypeError, IndexError, OverflowError:
         pass
     return default
 

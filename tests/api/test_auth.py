@@ -35,6 +35,10 @@ class FakeResponse:
         self.headers: dict[str, str] = headers or {}
 
     async def json(self, content_type: Any = None) -> Any:
+        if self._payload == "RAISE_JSON_DECODE_ERROR":
+            import json
+
+            json.loads("{invalid}")
         return self._payload
 
     async def __aenter__(self) -> "FakeResponse":
@@ -277,3 +281,30 @@ async def test_oauth_transport_error_raises_api_error() -> None:
     with pytest.raises(TossApiError) as excinfo:
         await manager.async_get_token()
     assert excinfo.value.code == "auth-connection-error"
+
+
+@pytest.mark.parametrize(
+    "bad_payload",
+    [
+        None,
+        {},
+        {"access_token": "token"},
+        {"access_token": "token", "token_type": "Bearer"},
+        {"access_token": "token", "token_type": "Bearer", "expires_in": "not-a-number"},
+        {"access_token": "token", "token_type": "Bearer", "expires_in": -3600},
+        {"access_token": "token", "token_type": "Bearer", "expires_in": float("inf")},
+        {"access_token": "token", "token_type": "Bearer", "expires_in": float("nan")},
+        {"access_token": "", "token_type": "Bearer", "expires_in": 3600},
+        {"access_token": "token", "token_type": "MAC", "expires_in": 3600},
+        "RAISE_JSON_DECODE_ERROR",
+    ],
+)
+async def test_oauth_malformed_responses_raise_api_error(bad_payload: Any) -> None:
+    session = FakeSession(
+        [FakeResponse(status=200, payload=bad_payload, headers={"X-Request-Id": "req-malformed"})]
+    )
+    manager = make_manager(session)
+    with pytest.raises(TossApiError) as excinfo:
+        await manager.async_get_token()
+    assert excinfo.value.code == "auth-malformed-response"
+    assert excinfo.value.request_id == "req-malformed"

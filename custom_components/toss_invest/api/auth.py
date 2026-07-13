@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import math
 import time
 from typing import Any
 
@@ -89,7 +90,7 @@ class TokenManager:
                 await self._limiter.async_update(AUTH_RATE_LIMIT_GROUP, response.headers)
                 try:
                     payload: Any = await response.json(content_type=None)
-                except Exception:
+                except ValueError, TypeError, aiohttp.ContentTypeError:
                     payload = None
 
                 if response.status == 429:
@@ -115,8 +116,34 @@ class TokenManager:
                     )
                     raise TossAuthError(str(code))
 
-                token = str(payload["access_token"])
-                expires_in = float(payload["expires_in"])
+                request_id = None
+                if isinstance(payload, dict) and "error" in payload:
+                    err_data = payload["error"]
+                    if isinstance(err_data, dict):
+                        request_id = err_data.get("requestId")
+                request_id = request_id or response.headers.get("X-Request-Id")
+
+                if not isinstance(payload, dict):
+                    raise TossApiError(request_id, "auth-malformed-response")
+
+                access_token = payload.get("access_token")
+                token_type = payload.get("token_type")
+                expires_in_raw = payload.get("expires_in")
+
+                if not isinstance(access_token, str) or not access_token:
+                    raise TossApiError(request_id, "auth-malformed-response")
+
+                if token_type != "Bearer":
+                    raise TossApiError(request_id, "auth-malformed-response")
+
+                try:
+                    expires_in = float(expires_in_raw)  # type: ignore
+                    if not math.isfinite(expires_in) or expires_in <= 0:
+                        raise TossApiError(request_id, "auth-malformed-response")
+                except ValueError, TypeError:
+                    raise TossApiError(request_id, "auth-malformed-response")
+
+                token = str(access_token)
                 self._token = token
                 self._expires_at = self._clock() + max(
                     expires_in - _EXPIRY_SAFETY_MARGIN_SECONDS, 0.0

@@ -68,12 +68,18 @@ class TossInvestClient:
         max_attempts = 4  # 1 initial + 3 retries
         has_refreshed_token = False
 
+        should_sleep = False
+        sleep_duration = 0.0
+
         while True:
             await self._limiter.async_wait(group)
             token = await self._tokens.async_get_token()
             headers = {"Authorization": f"Bearer {token}"}
             if account_seq is not None:
                 headers["X-Tossinvest-Account"] = str(account_seq)
+
+            should_sleep = False
+            sleep_duration = 0.0
 
             try:
                 async with self._session.request(
@@ -93,14 +99,14 @@ class TossInvestClient:
                         else:
                             try:
                                 payload = await response.json(content_type=None)
-                            except Exception:
+                            except ValueError, TypeError, aiohttp.ContentTypeError:
                                 payload = None
                             raise TossAuthError(_error_code(payload))
 
                     if response.status == 429:
                         try:
                             payload = await response.json(content_type=None)
-                        except Exception:
+                        except ValueError, TypeError, aiohttp.ContentTypeError:
                             payload = None
                         retry_after = parse_retry_after(
                             response.headers.get("Retry-After"), default=1.0
@@ -111,51 +117,55 @@ class TossInvestClient:
                         if attempt < max_attempts - 1:
                             attempt += 1
                             backoff = min(10.0, 0.5 * (2 ** (attempt - 1)))
-                            jittered = random.uniform(0.0, backoff)
-                            await asyncio.sleep(jittered)
-                            continue
+                            sleep_duration = random.uniform(0.0, backoff)
+                            should_sleep = True
                         else:
                             try:
                                 payload = await response.json(content_type=None)
-                            except Exception:
+                            except ValueError, TypeError, aiohttp.ContentTypeError:
                                 payload = None
                             request_id = (
                                 _error_request_id(payload) if payload else None
                             ) or response.headers.get("X-Request-Id")
                             raise TossApiError(request_id, f"server-error-{response.status}")
 
-                    if response.status >= 400:
+                    if not should_sleep:
+                        if response.status >= 400:
+                            try:
+                                payload = await response.json(content_type=None)
+                            except ValueError, TypeError, aiohttp.ContentTypeError:
+                                payload = None
+                            request_id = (
+                                _error_request_id(payload) if payload else None
+                            ) or response.headers.get("X-Request-Id")
+                            code = _error_code(payload) if payload is not None else "api-error"
+                            _LOGGER.debug("Toss API error code=%s request_id=%s", code, request_id)
+                            raise TossApiError(request_id, code)
+
+                        # Success (2xx)
                         try:
                             payload = await response.json(content_type=None)
-                        except Exception:
-                            payload = None
-                        request_id = (
-                            _error_request_id(payload) if payload else None
-                        ) or response.headers.get("X-Request-Id")
-                        code = _error_code(payload) if payload is not None else "api-error"
-                        _LOGGER.debug("Toss API error code=%s request_id=%s", code, request_id)
-                        raise TossApiError(request_id, code)
+                        except (ValueError, TypeError, aiohttp.ContentTypeError) as err:
+                            raise TossApiError(
+                                response.headers.get("X-Request-Id"), "api-error"
+                            ) from err
 
-                    # Success (2xx)
-                    try:
-                        payload = await response.json(content_type=None)
-                    except Exception:
-                        raise TossApiError(response.headers.get("X-Request-Id"), "api-error")
+                        if not isinstance(payload, dict) or "result" not in payload:
+                            raise TossApiError(response.headers.get("X-Request-Id"), "api-error")
 
-                    if not isinstance(payload, dict) or "result" not in payload:
-                        raise TossApiError(response.headers.get("X-Request-Id"), "api-error")
-
-                    return payload["result"]
+                        return payload["result"]
 
             except (aiohttp.ClientError, asyncio.TimeoutError) as err:
                 if attempt < max_attempts - 1:
                     attempt += 1
                     backoff = min(10.0, 0.5 * (2 ** (attempt - 1)))
-                    jittered = random.uniform(0.0, backoff)
-                    await asyncio.sleep(jittered)
-                    continue
+                    sleep_duration = random.uniform(0.0, backoff)
+                    should_sleep = True
                 else:
                     raise TossApiError(None, "connection-error") from err
+
+            if should_sleep:
+                await asyncio.sleep(sleep_duration)
 
     async def async_validate(self) -> None:
         """Exchange credentials for a token, raising `TossAuthError` if they are rejected."""
