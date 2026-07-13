@@ -31,35 +31,37 @@ views:
               - type: heading
                 heading: 요약
                 icon: mdi:wallet-outline
-              - type: horizontal-stack
-                cards:
-                  - type: custom:button-card
-                    entity: switch.toss_invest_portfolio_privacy_mode
-                    name: 금액 가리기
-                    icon: mdi:eye-off
-                    tap_action:
-                      action: toggle
-                    styles:
-                      card:
-                        - background: var(--card-background-color)
-                        - color: var(--primary-text-color)
-                        - border: 1px solid var(--divider-color)
-                        - border-radius: 18px
-                  - type: custom:button-card
-                    entity: button.toss_invest_portfolio_refresh
-                    name: 새로고침
-                    icon: mdi:refresh
-                    tap_action:
-                      action: call-service
-                      service: button.press
-                      target:
-                        entity_id: button.toss_invest_portfolio_refresh
-                    styles:
-                      card:
-                        - background: var(--card-background-color)
-                        - color: var(--primary-text-color)
-                        - border: 1px solid var(--divider-color)
-                        - border-radius: 18px
+              - type: custom:button-card
+                entity: switch.toss_invest_portfolio_privacy_mode
+                name: 금액 가리기
+                icon: mdi:eye-off
+                tap_action:
+                  action: toggle
+                styles: &toss_card_styles
+                  card:
+                    - background: var(--card-background-color)
+                    - color: var(--primary-text-color)
+                    - border: 1px solid var(--toss-card-border-color, var(--divider-color))
+                    - border-radius: 18px
+                    - box-shadow: var(--toss-card-glow, none)
+              - type: custom:auto-entities
+                show_empty: false
+                card:
+                  type: horizontal-stack
+                card_param: cards
+                filter:
+                  include:
+                    - entity_id: button.toss_invest_portfolio_refresh
+                      options:
+                        type: custom:button-card
+                        name: 새로고침
+                        icon: mdi:refresh
+                        tap_action:
+                          action: call-service
+                          service: button.press
+                          target:
+                            entity_id: button.toss_invest_portfolio_refresh
+                        styles: *toss_card_styles
               - type: horizontal-stack
                 cards:
                   - type: custom:button-card
@@ -70,33 +72,34 @@ views:
                     label: >-
                       [[[ const hidden = states['switch.toss_invest_portfolio_privacy_mode'].state !== 'off';
                       return hidden ? '••••' : `${entity.state} ${entity.attributes.unit_of_measurement || ''}`; ]]]
-                    styles:
-                      card:
-                        - background: var(--card-background-color)
-                        - color: var(--primary-text-color)
-                        - border: 1px solid var(--divider-color)
-                        - border-radius: 18px
+                    styles: *toss_card_styles
                   - type: custom:button-card
-                    entity: sensor.toss_invest_portfolio_daily_return
-                    name: 오늘 수익률
-                    show_state: true
-                    state:
-                      - operator: ">"
-                        value: 0
-                        color: var(--toss-gain-color, #d32f2f)
-                      - operator: "<"
-                        value: 0
-                        color: var(--toss-loss-color, #1565c0)
-                    styles:
-                      card:
-                        - background: var(--card-background-color)
-                        - color: var(--primary-text-color)
-                        - border: 1px solid var(--divider-color)
-                        - border-radius: 18px
+                    entity: sensor.toss_invest_portfolio_daily_profit_loss_krw
+                    name: 오늘 손익
+                    show_state: false
+                    show_label: true
+                    label: >-
+                      [[[ const hidden = states['switch.toss_invest_portfolio_privacy_mode'].state !== 'off';
+                      return hidden ? '••••' : `${entity.state} ${entity.attributes.unit_of_measurement || ''}`; ]]]
+                    styles: *toss_card_styles
+              - type: entities
+                title: 수익률 · 시장 · 갱신
+                entities:
+                  - entity: sensor.toss_invest_portfolio_daily_return
+                    name: 오늘 수익률 (±%)
+                  - entity: sensor.toss_invest_portfolio_total_return_after_cost
+                    name: 총 수익률 · 비용 반영 (±%)
+                  - entity: sensor.toss_invest_portfolio_kr_market_status
+                    name: 한국 시장
+                  - entity: sensor.toss_invest_portfolio_us_market_status
+                    name: 미국 시장
+                  - entity: sensor.toss_invest_portfolio_data_freshness
+                    name: 최근 갱신
               - type: markdown
                 content: >-
                   금액 가리기는 화면 템플릿일 뿐 **권한 경계**가 아닙니다. 개발자 도구와
-                  엔티티 기록에서는 원본 금액을 볼 수 있습니다.
+                  엔티티 기록에서는 원본 금액을 볼 수 있습니다. 등락은 색상과 함께 `+`/`-`
+                  부호와 수치로 표시됩니다.
 
           - type: vertical-stack
             view_layout:
@@ -142,7 +145,7 @@ views:
                   type: custom:layout-card
                   layout_type: custom:grid-layout
                   layout:
-                    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr))
+                    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr))
                 card_param: cards
                 filter:
                   include:
@@ -155,13 +158,22 @@ views:
                         show_label: true
                         label: >-
                           [[[ const hidden = states['switch.toss_invest_portfolio_privacy_mode'].state !== 'off';
-                          return hidden ? '••••' : `${entity.state} ${entity.attributes.unit_of_measurement || ''}`; ]]]
+                          const id = entity.entity_id;
+                          const price = states[id.replace('_market_value', '_current_price')];
+                          const daily = states[id.replace('_market_value', '_daily_return')];
+                          const total = states[id.replace('_market_value', '_total_return_after_cost')];
+                          const money = hidden ? '••••' : `${entity.state} ${entity.attributes.unit_of_measurement || ''}`;
+                          const current = hidden ? '••••' : `${price?.state ?? '—'} ${price?.attributes.unit_of_measurement ?? ''}`;
+                          return `${money}<br>현재가 ${current}<br>오늘 ${daily?.state ?? '—'}% · 총 ${total?.state ?? '—'}%`; ]]]
                         styles:
-                          card:
-                            - background: var(--card-background-color)
-                            - color: var(--primary-text-color)
-                            - border: 1px solid var(--divider-color)
-                            - border-radius: 18px
+                          <<: *toss_card_styles
+                          label:
+                            - color: >-
+                                [[[ const id = entity.entity_id;
+                                const daily = Number(states[id.replace('_market_value', '_daily_return')]?.state);
+                                if (daily > 0) return 'var(--toss-gain-color, #d32f2f)';
+                                if (daily < 0) return 'var(--toss-loss-color, #1565c0)';
+                                return 'var(--toss-neutral-color, var(--secondary-text-color))'; ]]]
                 sort:
                   method: name
 
@@ -172,24 +184,118 @@ views:
               - type: heading
                 heading: 선택 종목 상세
                 icon: mdi:chart-timeline-variant
+              - type: markdown
+                content: >-
+                  엔티티 레지스트리에서 보고 싶은 종목의 `daily_candles`를 **하나만 활성화**하면
+                  아래에 1년 가격 차트가 나타납니다. 같은 종목의 기간 지표도 필요한 것만
+                  활성화하세요. 여러 종목을 켜면 차트가 종목별로 추가됩니다.
+              - type: conditional
+                conditions:
+                  - condition: state
+                    entity: switch.toss_invest_portfolio_privacy_mode
+                    state: "on"
+                card:
+                  type: markdown
+                  content: "가격 차트와 기간 고가·저가는 금액 가리기 사용 중이므로 **••••** 처리됩니다."
+              - type: conditional
+                conditions:
+                  - condition: state
+                    entity: switch.toss_invest_portfolio_privacy_mode
+                    state: "off"
+                card:
+                  type: custom:auto-entities
+                  show_empty: false
+                  card:
+                    type: vertical-stack
+                  card_param: cards
+                  filter:
+                    include:
+                      - integration: toss_invest
+                        domain: sensor
+                        entity_id: sensor.*_daily_candles
+                        options:
+                          type: custom:apexcharts-card
+                          graph_span: 1y
+                          header:
+                            show: true
+                            show_states: false
+                            title: 선택 종목 일봉 종가
+                          apex_config:
+                            chart:
+                              background: transparent
+                          series:
+                            - entity: this.entity_id
+                              name: 종가
+                              type: line
+                              stroke_width: 2
+                              color: var(--toss-neutral-color, var(--primary-color))
+                              data_generator: |
+                                return (entity.attributes.candles || []).map((candle) => [
+                                  new Date(candle.timestamp).getTime(), Number(candle.close)
+                                ]);
+                  sort:
+                    method: name
               - type: custom:auto-entities
                 show_empty: false
                 card:
                   type: entities
-                  title: 활성 종목 현재가
+                  title: 기간 수익률 · 낙폭 · 변동성
                 filter:
                   include:
                     - integration: toss_invest
                       domain: sensor
-                      entity_id: sensor.*_current_price
-                      options:
-                        secondary_info: last-changed
+                      entity_id: sensor.*_one_week_return
+                    - integration: toss_invest
+                      domain: sensor
+                      entity_id: sensor.*_one_month_return
+                    - integration: toss_invest
+                      domain: sensor
+                      entity_id: sensor.*_three_month_return
+                    - integration: toss_invest
+                      domain: sensor
+                      entity_id: sensor.*_six_month_return
+                    - integration: toss_invest
+                      domain: sensor
+                      entity_id: sensor.*_one_year_return
+                    - integration: toss_invest
+                      domain: sensor
+                      entity_id: sensor.*_drawdown
+                    - integration: toss_invest
+                      domain: sensor
+                      entity_id: sensor.*_historical_volatility
                 sort:
                   method: name
-              - type: markdown
-                content: >-
-                  종목을 눌러 상세 기록을 확인하세요. 기간 수익률·고가/저가·낙폭·변동성은
-                  선택적으로 활성화하는 엔티티입니다.
+              - type: conditional
+                conditions:
+                  - condition: state
+                    entity: switch.toss_invest_portfolio_privacy_mode
+                    state: "off"
+                card:
+                  type: custom:auto-entities
+                  show_empty: false
+                  card:
+                    type: entities
+                    title: 기간 고가 · 저가
+                  filter:
+                    include:
+                      - integration: toss_invest
+                        domain: sensor
+                        entity_id: sensor.*_period_high
+                      - integration: toss_invest
+                        domain: sensor
+                        entity_id: sensor.*_period_low
+                  sort:
+                    method: name
+              - type: custom:auto-entities
+                show_empty: false
+                card:
+                  type: entities
+                  title: 선택 종목 경고
+                filter:
+                  include:
+                    - integration: toss_invest
+                      domain: binary_sensor
+                      entity_id: binary_sensor.*_warning
 
           - type: vertical-stack
             view_layout:
@@ -199,20 +305,68 @@ views:
                 heading: 시장 맥락
                 icon: mdi:earth
               - type: entities
+                title: 시장 상태 · 지수
                 entities:
                   - sensor.toss_invest_portfolio_kr_market_status
                   - sensor.toss_invest_portfolio_us_market_status
                   - sensor.toss_invest_portfolio_krw_usd_exchange_rate
+                  - sensor.toss_invest_portfolio_market_indicator_kospi
+                  - sensor.toss_invest_portfolio_market_indicator_kosdaq
               - type: custom:auto-entities
                 show_empty: false
                 card:
                   type: entities
-                  title: 선택 데이터
+                  title: 한국 시장 지표
                 filter:
                   include:
-                    - integration: toss_invest
-                      domain: sensor
-                      entity_id: sensor.toss_invest_portfolio_*buying_power
+                    - entity_id: sensor.toss_invest_portfolio_market_indicator_*
+              - type: conditional
+                conditions:
+                  - condition: state
+                    entity: switch.toss_invest_portfolio_privacy_mode
+                    state: "off"
+                card:
+                  type: custom:auto-entities
+                  show_empty: false
+                  card:
+                    type: entities
+                    title: 투자자 순매수 (KRW)
+                  filter:
+                    include:
+                      - entity_id: sensor.toss_invest_portfolio_kospi_*_net
+                      - entity_id: sensor.toss_invest_portfolio_kosdaq_*_net
+              - type: custom:auto-entities
+                show_empty: false
+                card:
+                  type: entities
+                  title: KR · US 상위 10 순위
+                filter:
+                  include:
+                    - entity_id: sensor.toss_invest_portfolio_kr_market_trading_amount
+                    - entity_id: sensor.toss_invest_portfolio_kr_top_gainers
+                    - entity_id: sensor.toss_invest_portfolio_kr_top_losers
+                    - entity_id: sensor.toss_invest_portfolio_us_market_trading_amount
+                    - entity_id: sensor.toss_invest_portfolio_us_top_gainers
+                    - entity_id: sensor.toss_invest_portfolio_us_top_losers
+              - type: custom:auto-entities
+                show_empty: false
+                card:
+                  type: custom:layout-card
+                  layout_type: custom:grid-layout
+                  layout:
+                    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr))
+                card_param: cards
+                filter:
+                  include:
+                    - entity_id: sensor.toss_invest_portfolio_buying_power_*
+                      options:
+                        type: custom:button-card
+                        show_state: false
+                        show_label: true
+                        label: >-
+                          [[[ const hidden = states['switch.toss_invest_portfolio_privacy_mode'].state !== 'off';
+                          return hidden ? '••••' : `${entity.state} ${entity.attributes.unit_of_measurement || ''}`; ]]]
+                        styles: *toss_card_styles
 
           - type: vertical-stack
             view_layout:
@@ -222,19 +376,26 @@ views:
                 heading: 위험 및 알림
                 icon: mdi:shield-alert-outline
               - type: entities
+                title: 상태 · 최근 활성 알림
                 entities:
                   - sensor.toss_invest_portfolio_api_health
                   - sensor.toss_invest_portfolio_data_freshness
                   - event.toss_invest_portfolio_alert
+              - type: markdown
+                content: >-
+                  **알림 임계값**은 통합 옵션의 일일 등락·총수익률·낙폭·거래량 항목에서
+                  설정합니다. 최근 활성 알림의 관측값과 임계값은 개인정보 옵션이 허용한
+                  경우에만 위 이벤트와 번들 블루프린트로 전달됩니다.
               - type: custom:auto-entities
                 show_empty: false
                 card:
                   type: entities
-                  title: 종목 경고
+                  title: 활성 종목 경고
                 filter:
                   include:
                     - integration: toss_invest
                       domain: binary_sensor
                       entity_id: binary_sensor.*_warning
+                      state: "on"
                 sort:
                   method: name

@@ -12,10 +12,19 @@ views:
             entity: switch.toss_invest_portfolio_privacy_mode
             name: 금액 가리기
             icon: mdi:eye-off
-          - type: tile
-            entity: button.toss_invest_portfolio_refresh
-            name: 새로고침 (선택 사항)
-            icon: mdi:refresh
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: button.toss_invest_portfolio_refresh
+                state_not: unavailable
+              - condition: state
+                entity: button.toss_invest_portfolio_refresh
+                state_not: unknown
+            card:
+              type: tile
+              entity: button.toss_invest_portfolio_refresh
+              name: 새로고침
+              icon: mdi:refresh
           - type: conditional
             conditions:
               - condition: state
@@ -23,8 +32,7 @@ views:
                 state: "on"
             card:
               type: markdown
-              content: >-
-                **평가 금액을 가렸습니다.** 수익률과 배분 비율은 계속 표시됩니다.
+              content: "모든 금액과 가격을 **••••** 처리했습니다. 수익률과 배분 비율은 계속 표시됩니다."
           - type: conditional
             conditions:
               - condition: state
@@ -41,80 +49,116 @@ views:
                 - entity: sensor.toss_invest_portfolio_profit_loss_after_cost_krw
                   name: 총 손익 · 비용 반영 (KRW)
           - type: entities
-            title: 수익률
+            title: 수익률 · 시장 · 갱신
             entities:
               - entity: sensor.toss_invest_portfolio_daily_return
-                name: 오늘 수익률
+                name: 오늘 수익률 (±%)
               - entity: sensor.toss_invest_portfolio_total_return_after_cost
-                name: 총 수익률 · 비용 반영
+                name: 총 수익률 · 비용 반영 (±%)
+              - entity: sensor.toss_invest_portfolio_kr_market_status
+                name: 한국 시장
+              - entity: sensor.toss_invest_portfolio_us_market_status
+                name: 미국 시장
+              - entity: sensor.toss_invest_portfolio_data_freshness
+                name: 최근 갱신
 
       - type: grid
         title: 배분
         cards:
           - type: entities
             entities:
-              - entity: sensor.toss_invest_portfolio_allocation_kr
-                name: 한국
-              - entity: sensor.toss_invest_portfolio_allocation_us
-                name: 미국
-              - entity: sensor.toss_invest_portfolio_allocation_krw
-                name: 원화
-              - entity: sensor.toss_invest_portfolio_allocation_usd
-                name: 달러
-              - entity: sensor.toss_invest_portfolio_top_one_concentration
-                name: 상위 1종목 집중도
-              - entity: sensor.toss_invest_portfolio_top_three_concentration
-                name: 상위 3종목 집중도
+              - sensor.toss_invest_portfolio_allocation_kr
+              - sensor.toss_invest_portfolio_allocation_us
+              - sensor.toss_invest_portfolio_allocation_krw
+              - sensor.toss_invest_portfolio_allocation_usd
+              - sensor.toss_invest_portfolio_top_one_concentration
+              - sensor.toss_invest_portfolio_top_three_concentration
 
       - type: grid
         title: 보유 종목
         cards:
           - type: markdown
             content: >-
-              보유 종목 엔티티 ID는 종목 이름에서 동적으로 만들어집니다. 이 기본판에서는
-              대시보드 편집기의 **엔티티** 카드에 원하는 `sensor.<종목 이름>_*` 엔티티를
-              추가하세요. 자동 목록은 enhanced 예제에서 제공합니다.
+              기본 카드만 사용하는 버전입니다. `sensor.<종목 이름>_daily_return`과
+              `sensor.<종목 이름>_total_return_after_cost`처럼 금액이 아닌 수익률 엔티티는
+              직접 추가할 수 있습니다. 현재가·평가금액은 아래 개인정보 보호 원칙에 따라
+              반드시 금액 가리기 `off` 조건부 카드 안에 추가하세요.
 
       - type: grid
         title: 선택 종목 상세
         cards:
           - type: markdown
             content: >-
-              활성 종목의 현재가·수익률 엔티티를 여기에 추가할 수 있습니다. 1주~1년 수익률,
-              고가/저가, 낙폭, 변동성 엔티티는 기본적으로 비활성화되어 있으므로 필요한
-              항목만 엔티티 레지스트리에서 켜세요.
+              기본 카드에는 동적 선택 차트가 없습니다. 원하는 종목의 기간 수익률·낙폭·변동성
+              엔티티를 활성화해 추가하거나, 자동 일봉 차트가 포함된 enhanced 예제를 사용하세요.
 
       - type: grid
         title: 시장 맥락
         cards:
           - type: entities
+            title: 지수
             entities:
-              - entity: sensor.toss_invest_portfolio_kr_market_status
-                name: 한국 시장
-              - entity: sensor.toss_invest_portfolio_us_market_status
-                name: 미국 시장
-              - entity: sensor.toss_invest_portfolio_krw_usd_exchange_rate
-                name: KRW/USD
-          - type: entities
-            title: 옵션 데이터
-            show_header_toggle: false
-            entities:
-              - entity: sensor.toss_invest_portfolio_krw_buying_power
-                name: 원화 주문 가능 금액
-              - entity: sensor.toss_invest_portfolio_usd_buying_power
-                name: 달러 주문 가능 금액
+              - sensor.toss_invest_portfolio_market_indicator_kospi
+              - sensor.toss_invest_portfolio_market_indicator_kosdaq
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: switch.toss_invest_portfolio_privacy_mode
+                state: "off"
+            card:
+              type: entities
+              title: 투자자 순매수 (KRW)
+              entities:
+                - sensor.toss_invest_portfolio_kospi_individual_net
+                - sensor.toss_invest_portfolio_kospi_foreigner_net
+                - sensor.toss_invest_portfolio_kospi_institution_net
+                - sensor.toss_invest_portfolio_kospi_other_corporation_net
+                - sensor.toss_invest_portfolio_kosdaq_individual_net
+                - sensor.toss_invest_portfolio_kosdaq_foreigner_net
+                - sensor.toss_invest_portfolio_kosdaq_institution_net
+                - sensor.toss_invest_portfolio_kosdaq_other_corporation_net
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: switch.toss_invest_portfolio_privacy_mode
+                state: "off"
+              - condition: state
+                entity: sensor.toss_invest_portfolio_buying_power_krw
+                state_not: unavailable
+              - condition: state
+                entity: sensor.toss_invest_portfolio_buying_power_krw
+                state_not: unknown
+            card:
+              type: entity
+              entity: sensor.toss_invest_portfolio_buying_power_krw
+              name: 원화 주문 가능 금액
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: switch.toss_invest_portfolio_privacy_mode
+                state: "off"
+              - condition: state
+                entity: sensor.toss_invest_portfolio_buying_power_usd
+                state_not: unavailable
+              - condition: state
+                entity: sensor.toss_invest_portfolio_buying_power_usd
+                state_not: unknown
+            card:
+              type: entity
+              entity: sensor.toss_invest_portfolio_buying_power_usd
+              name: 달러 주문 가능 금액
+          - type: markdown
+            content: "선택 옵션 엔티티가 없으면 카드도 숨겨집니다. 채권 지표와 순위는 필요한 엔티티만 활성화해 추가하세요."
 
       - type: grid
         title: 위험 및 알림
         cards:
           - type: entities
             entities:
-              - entity: sensor.toss_invest_portfolio_api_health
-                name: API 상태
-              - entity: sensor.toss_invest_portfolio_data_freshness
-                name: 최근 갱신
+              - sensor.toss_invest_portfolio_api_health
+              - sensor.toss_invest_portfolio_data_freshness
+              - event.toss_invest_portfolio_alert
           - type: markdown
             content: >-
-              종목 경고 엔티티도 종목 이름 기반의 `binary_sensor.<종목 이름>_warning`
-              형식입니다. 자동 경고 목록과 알림 라우팅은 enhanced 예제와 번들
-              블루프린트를 사용하세요.
+              알림 임계값은 통합 옵션에서 설정합니다. 종목별 활성 경고를 자동으로 모으려면
+              enhanced 예제를, 알림 전송에는 번들 블루프린트를 사용하세요.

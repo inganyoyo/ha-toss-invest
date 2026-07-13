@@ -37,6 +37,12 @@ variables:
     source_timestamp: >-
       {{ trigger.to_state.attributes.get('source_timestamp', '')
          if trigger.to_state is not none else '' }}
+    observed: >-
+      {{ trigger.to_state.attributes.get('observed')
+         if trigger.to_state is not none else none }}
+    threshold: >-
+      {{ trigger.to_state.attributes.get('threshold')
+         if trigger.to_state is not none else none }}
 
 conditions:
   - condition: template
