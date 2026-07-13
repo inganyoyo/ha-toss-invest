@@ -886,6 +886,31 @@ git add README.md LICENSE docs .github hacs.json tests/test_documentation.py
 git commit -m "docs: prepare HACS release and CI validation"
 ```
 
+### Task 10B: AGY Final-audit Hardening
+
+**Files:**
+- Modify: `custom_components/toss_invest/{sensor,button}.py`
+- Modify: `tests/{test_sensor,test_controls}.py`
+- Modify: `dev/{compose.yaml,README.md}` and `tests/test_dev_compose.py`
+- Modify: `dashboards/toss-invest-enhanced.yaml` and `tests/test_yaml_artifacts.py`
+
+**Interfaces:**
+- Cleans optional buying-power/refresh registry entries when their options are disabled.
+- Allows a git-ignored developer secrets file override while keeping the example file as a zero-setup default.
+- Makes enhanced dashboard JavaScript fail safe while HA states/entities are still loading.
+
+- [ ] **Step 1: Write failing regression tests**
+
+Cover true-to-false option reload removal for buying-power sensors and the manual-refresh button, Compose default/override secrets source mapping without target overlap, and optional chaining/fallbacks for privacy, entity state/attributes, and candle attributes.
+
+- [ ] **Step 2: Implement the bounded hardening**
+
+Reuse entity-registry cleanup patterns without touching required entities. Use a Compose environment variable with a checked-in example default and document a `dev/secrets.yaml` override. Add JavaScript optional chaining and neutral fallbacks without weakening monetary masking.
+
+- [ ] **Step 3: Verify and commit**
+
+Run focused/full pytest, Ruff check/format, mypy, Compose config with default and override, actual HA 2026.7.2 startup, and dashboard YAML contracts. Commit the registry and UI/dev-environment fixes separately.
+
 ### Task 11: End-to-end Verification, Public Repository, and Production Gate
 
 **Files:**
