@@ -729,6 +729,29 @@ git add custom_components/toss_invest/alerts.py custom_components/toss_invest/bu
 git commit -m "feat: add privacy controls and investment alerts"
 ```
 
+### Task 8B: Remove No-op Configuration Controls
+
+**Files:**
+- Modify: `custom_components/toss_invest/config_flow.py`
+- Modify: `custom_components/toss_invest/{strings.json,translations/en.json,translations/ko.json}`
+- Modify: `tests/test_config_flow.py`
+
+**Interfaces:**
+- Removes Options Flow controls that v0.1 cannot honor: optional KRW conversion, backend dashboard colors, and monetary alert payload opt-in.
+- Keeps FX normalization always enabled for meaningful mixed-currency allocation/concentration calculations; dashboard colors remain explicit Lovelace theme variables; monetary event values remain fail-safe omitted.
+
+- [ ] **Step 1: Write failing contract tests**
+
+Assert the Options Flow schema and all translation catalogs exclude `enable_krw_conversion`, `gain_color`, `loss_color`, `neutral_color`, `border_color`, `glow_color`, and `include_monetary_alert_payloads`. Preserve every functional schedule, optional-data, cooldown, boolean-alert, and numerical-threshold option.
+
+- [ ] **Step 2: Remove the no-op UI surface**
+
+Delete the unused constants, defaults, selectors, schema rows, and translations. Do not remove the internal fail-safe event policy: absent `include_monetary_alert_payloads` must still omit monetary `observed` and `threshold` values. Do not alter allocation/concentration calculations or dashboard CSS variables.
+
+- [ ] **Step 3: Verify and commit**
+
+Run focused/full pytest, Ruff check/format, mypy, translation JSON checks, and an `rg` scan showing no user-facing no-op option remains. Commit `fix: remove no-op integration options`.
+
 ### Task 9: Theme-adaptive Dashboard and Notification Blueprint
 
 **Files:**
