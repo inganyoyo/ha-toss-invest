@@ -235,6 +235,21 @@ class TossInvestClient:
             "/api/v1/market-indicators/prices", group="MARKET_INDICATOR", symbols=symbols
         )
 
+    async def async_get_market_indicator_candles(
+        self,
+        symbol: Literal["KOSPI", "KOSDAQ"],
+        count: int = 100,
+        *,
+        interval: Literal["1d"] = "1d",
+    ) -> dict[str, Any]:
+        # Unlike /api/v1/candles (stocks), rows here have no `currency` field.
+        return await self._request(
+            "GET",
+            f"/api/v1/market-indicators/{symbol}/candles",
+            group="MARKET_INDICATOR",
+            params={"interval": interval, "count": count},
+        )
+
     async def async_get_investor_trading(
         self,
         symbol: Literal["KOSPI", "KOSDAQ"],

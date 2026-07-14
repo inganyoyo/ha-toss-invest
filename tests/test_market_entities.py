@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from unittest.mock import AsyncMock, patch
 
 from homeassistant.config_entries import ConfigEntryState
@@ -51,6 +52,32 @@ def market_api() -> AsyncMock:
         "nextUntil": None,
     }
     client.async_get_investor_trading.side_effect = lambda _symbol, **_kwargs: records
+
+    def candles_for(symbol: str, **_kwargs: object) -> dict[str, object]:
+        closes = {"KOSPI": ("100", "102"), "KOSDAQ": ("100", "99")}.get(symbol, ("100", "100"))
+        return {
+            "candles": [
+                {
+                    "timestamp": "2026-07-13T00:00:00.000+09:00",
+                    "openPrice": closes[0],
+                    "highPrice": closes[0],
+                    "lowPrice": closes[0],
+                    "closePrice": closes[0],
+                    "volume": "1000",
+                },
+                {
+                    "timestamp": "2026-07-14T00:00:00.000+09:00",
+                    "openPrice": closes[1],
+                    "highPrice": closes[1],
+                    "lowPrice": closes[1],
+                    "closePrice": closes[1],
+                    "volume": "1000",
+                },
+            ],
+            "nextBefore": None,
+        }
+
+    client.async_get_market_indicator_candles.side_effect = candles_for
     return client
 
 
@@ -88,6 +115,17 @@ async def test_market_indicators_have_stable_values_defaults_and_device(hass) ->
     assert portfolio is not None
     indicator_entry = registry.async_get("sensor.toss_invest_portfolio_market_indicator_kospi")
     assert indicator_entry is not None and indicator_entry.device_id == portfolio.id
+
+
+async def test_market_indicators_expose_daily_return_from_candles(hass) -> None:
+    await setup_integration(hass, market_api())
+
+    kospi = hass.states.get("sensor.toss_invest_portfolio_market_indicator_kospi")
+    kosdaq = hass.states.get("sensor.toss_invest_portfolio_market_indicator_kosdaq")
+
+    assert kospi is not None and kosdaq is not None
+    assert Decimal(kospi.attributes["daily_return"]) == Decimal("0.02")
+    assert Decimal(kosdaq.attributes["daily_return"]) == Decimal("-0.01")
 
 
 async def test_investor_net_uses_latest_record_decimal_and_krw_metadata(hass) -> None:

@@ -35,6 +35,27 @@ def client(*, empty: bool = False) -> AsyncMock:
         {"symbol": symbol, "timestamp": None, "lastPrice": str(index + 1)}
         for index, symbol in enumerate(KOREAN_MARKET_INDICATORS)
     ]
+    api.async_get_market_indicator_candles.return_value = {
+        "candles": [
+            {
+                "timestamp": "2026-07-13T00:00:00.000+09:00",
+                "openPrice": "100",
+                "highPrice": "101",
+                "lowPrice": "99",
+                "closePrice": "100",
+                "volume": "1000",
+            },
+            {
+                "timestamp": "2026-07-14T00:00:00.000+09:00",
+                "openPrice": "101",
+                "highPrice": "102",
+                "lowPrice": "100",
+                "closePrice": "101",
+                "volume": "1000",
+            },
+        ],
+        "nextBefore": None,
+    }
     api.async_get_investor_trading.side_effect = lambda symbol, **_kwargs: {
         "records": [
             {
@@ -234,9 +255,13 @@ async def test_market_context_fetches_official_indicators_and_investor_flows(has
     assert set(runtime.market_context.data.investor_trading) == {"KOSPI", "KOSDAQ"}
     record = runtime.market_context.data.investor_trading["KOSPI"][0]
     assert record.foreigner.buy_amount == Decimal("30")
+    assert set(runtime.market_context.data.daily_returns) == {"KOSPI", "KOSDAQ"}
+    assert runtime.market_context.data.daily_returns["KOSPI"] == Decimal("1") / Decimal("100")
     api.async_get_market_indicators.assert_awaited_once_with(list(KOREAN_MARKET_INDICATORS))
     for call in api.async_get_investor_trading.await_args_list:
         assert call.kwargs == {"interval": "1d", "count": 10}
+    for call in api.async_get_market_indicator_candles.await_args_list:
+        assert call.kwargs == {"count": 2, "interval": "1d"}
 
 
 async def test_rankings_fetch_six_bounded_decimal_safe_snapshots(hass) -> None:

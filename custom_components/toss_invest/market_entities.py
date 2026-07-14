@@ -121,7 +121,12 @@ class TossMarketIndicatorSensor(TossInvestEntity, SensorEntity):
         indicator = snapshot.indicators.get(self.entity_description.symbol)
         if indicator is None:
             return None
-        return {"symbol": indicator.symbol, "timestamp": indicator.timestamp}
+        daily_return = snapshot.daily_returns.get(self.entity_description.symbol)
+        return {
+            "symbol": indicator.symbol,
+            "timestamp": indicator.timestamp,
+            "daily_return": str(daily_return) if daily_return is not None else None,
+        }
 
 
 class TossInvestorNetSensor(TossInvestEntity, SensorEntity):

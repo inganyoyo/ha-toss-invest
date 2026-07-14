@@ -24,6 +24,7 @@ def api() -> AsyncMock:
     client.async_get_candles.return_value = {"candles": candles["candles"], "nextBefore": None}
     client.async_get_warnings.return_value = []
     client.async_get_market_indicators.return_value = []
+    client.async_get_market_indicator_candles.return_value = {"candles": [], "nextBefore": None}
     client.async_get_investor_trading.return_value = {"records": [], "nextUntil": None}
     client.async_get_buying_power.side_effect = lambda _account, currency: {
         "currency": currency,

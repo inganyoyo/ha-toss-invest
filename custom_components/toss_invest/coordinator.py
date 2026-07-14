@@ -15,6 +15,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import TossApiError, TossAuthError, TossInvestClient, TossRateLimitError
+from .calculations import calculate_period_return
 from .models import (
     Candle,
     HoldingsOverview,
@@ -94,6 +95,7 @@ class InvestorTradingRecord:
 class MarketContextSnapshot:
     indicators: dict[str, MarketIndicator]
     investor_trading: dict[str, tuple[InvestorTradingRecord, ...]]
+    daily_returns: dict[str, Decimal] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -488,18 +490,45 @@ class MarketContextCoordinator(TossCoordinator[MarketContextSnapshot]):
             raise TossDataError("Invalid investor trading records")
         return symbol, tuple(InvestorTradingRecord.from_api(row) for row in rows)
 
+    async def _async_indicator_daily_return(
+        self, symbol: Literal["KOSPI", "KOSDAQ"]
+    ) -> tuple[str, Decimal | None]:
+        async with self._concurrency:
+            page = await self._client.async_get_market_indicator_candles(
+                symbol, count=2, interval="1d"
+            )
+        rows = page.get("candles")
+        if not isinstance(rows, list) or len(rows) < 2:
+            return symbol, None
+        sorted_rows = sorted(rows, key=lambda row: row["timestamp"])
+        previous_close = parse_decimal(
+            sorted_rows[-2]["closePrice"], "marketIndicatorCandle.closePrice"
+        )
+        last_close = parse_decimal(
+            sorted_rows[-1]["closePrice"], "marketIndicatorCandle.closePrice"
+        )
+        return symbol, calculate_period_return(previous_close, last_close)
+
     async def _async_fetch(self) -> MarketContextSnapshot:
         async with self._concurrency:
             indicator_rows = await self._client.async_get_market_indicators(
                 list(KOREAN_MARKET_INDICATORS)
             )
         indicators = [MarketIndicator.from_api(row) for row in indicator_rows]
-        investor_trading = await asyncio.gather(
-            *(self._async_investor_trading(symbol) for symbol in ("KOSPI", "KOSDAQ"))
+        investor_trading, daily_returns = await asyncio.gather(
+            asyncio.gather(
+                *(self._async_investor_trading(symbol) for symbol in ("KOSPI", "KOSDAQ"))
+            ),
+            asyncio.gather(
+                *(self._async_indicator_daily_return(symbol) for symbol in ("KOSPI", "KOSDAQ"))
+            ),
         )
         return MarketContextSnapshot(
             indicators={item.symbol: item for item in indicators},
             investor_trading=dict(investor_trading),
+            daily_returns={
+                symbol: value for symbol, value in daily_returns if value is not None
+            },
         )
 
 
