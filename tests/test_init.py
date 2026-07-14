@@ -32,6 +32,7 @@ def api() -> AsyncMock:
     client.async_get_candles.return_value = {"candles": [], "nextBefore": None}
     client.async_get_warnings.return_value = []
     client.async_get_market_indicators.return_value = []
+    client.async_get_market_indicator_candles.return_value = {"candles": [], "nextBefore": None}
     client.async_get_investor_trading.return_value = {"records": [], "nextUntil": None}
     market = fixture("market.json")
     assert isinstance(market, dict)

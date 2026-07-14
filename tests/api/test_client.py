@@ -381,6 +381,18 @@ async def test_warnings_uses_symbol_path_segment() -> None:
     assert get_call.url == f"{BASE_URL}/api/v1/stocks/TEST/warnings"
 
 
+async def test_market_indicator_candles_uses_symbol_path_segment() -> None:
+    inner_payload = {"candles": [{"timestamp": "2026-07-14T00:00:00+09:00"}], "nextBefore": None}
+    client, session = make_client([token_response(), ok(inner_payload)])
+
+    result = await client.async_get_market_indicator_candles("KOSPI", count=2, interval="1d")
+
+    assert result == inner_payload
+    get_call = next(call for call in session.calls if call.method == "GET")
+    assert get_call.url == f"{BASE_URL}/api/v1/market-indicators/KOSPI/candles"
+    assert get_call.kwargs["params"] == {"interval": "1d", "count": 2}
+
+
 async def test_empty_symbols_returns_empty_without_requests() -> None:
     client, session = make_client([])
     res_prices = await client.async_get_prices([])
