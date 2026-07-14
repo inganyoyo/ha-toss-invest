@@ -21,6 +21,3 @@ jobs:
       - uses: hacs/action@main
         with:
           category: integration
-          # Temporary for custom-repository development only. MUST remove this
-          # ignore after official home-assistant/brands registration.
-          ignore: brands
