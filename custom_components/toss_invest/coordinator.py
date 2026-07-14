@@ -526,9 +526,7 @@ class MarketContextCoordinator(TossCoordinator[MarketContextSnapshot]):
         return MarketContextSnapshot(
             indicators={item.symbol: item for item in indicators},
             investor_trading=dict(investor_trading),
-            daily_returns={
-                symbol: value for symbol, value in daily_returns if value is not None
-            },
+            daily_returns={symbol: value for symbol, value in daily_returns if value is not None},
         )
 
 
