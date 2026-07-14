@@ -157,8 +157,7 @@ def test_ci_workflows_have_expected_gates_and_permissions() -> None:
     assert "home-assistant/actions/hassfest@master" in validate_text
     assert "hacs/action@main" in validate_text
     assert "category: integration" in validate_text
-    assert "ignore: brands" in validate_text
-    assert "MUST remove" in validate_text
+    assert "ignore: brands" not in validate_text
 
     compatibility_text = _text(".github/workflows/compatibility.yaml")
     assert "schedule:" in compatibility_text and "cron:" in compatibility_text
@@ -183,8 +182,7 @@ def test_ci_workflows_have_expected_gates_and_permissions() -> None:
     assert "# v3.0.2" in release_text
     assert "contents: write" in release_text
     assert "manifest.json" in release_text
-    assert "ignore: brands" in release_text
-    assert "MUST remove" in release_text
+    assert "ignore: brands" not in release_text
 
     for name, workflow in workflows.items():
         assert workflow["permissions"] == {"contents": "read"}, name
