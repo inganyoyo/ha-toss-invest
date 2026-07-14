@@ -6,6 +6,20 @@ configuration에 덮어쓰지 말고, 기존 `views:` 목록 아래에 선택한
 **여섯 번째 view**로 삽입하세요. 기존 설정에 `path: toss-invest`가 있으면 경로를
 바꿔야 합니다.
 
+## 📸 대시보드 미리보기 (Previews)
+
+고급형 대시보드(`toss-invest-enhanced.yaml`)를 적용했을 때의 실제 구성 예시입니다. 프라이버시 모드(Privacy Mode)가 켜지면 중요 금액 정보가 자동으로 마스킹 처리됩니다.
+
+| **자산 요약 (프라이버시 모드)** | **보유 종목 (프라이버시 모드)** |
+| :---: | :---: |
+| ![자산 요약](../docs/images/dashboard_summary_privacy.png) | ![보유 종목](../docs/images/dashboard_holdings_privacy.png) |
+
+| **자산 배분 (원화/외화)** | **시장 맥락 (지수 및 주체별 순매수)** |
+| :---: | :---: |
+| ![자산 배분](../docs/images/dashboard_allocation.png) | ![시장 맥락](../docs/images/dashboard_market_context.png) |
+
+---
+
 ## 두 버전
 
 - `toss-invest-native.yaml`: Home Assistant 기본 카드만 사용합니다. 선택 엔티티가 없으면

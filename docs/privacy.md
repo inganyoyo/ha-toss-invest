@@ -25,6 +25,10 @@ Authorization header, OAuth 값, 계좌 식별자와 실제 평가 금액을 직
 state를 변경하지 않으며 Developer Tools, WebSocket/REST API, entity detail, automation,
 history, backup 및 Recorder database 접근자는 원래 값을 볼 수 있습니다.
 
+![프라이버시 모드 적용 화면](images/dashboard_summary_privacy.png)
+*(프라이버시 모드가 활성화된 대시보드 예시)*
+
+
 실제 분리는 Home Assistant 사용자/관리자 권한, 별도 dashboard 접근, 네트워크 통제와
 백업 암호화로 수행하세요. Privacy mode가 unknown/unavailable이면 제공 dashboard는
 fail-safe로 금액을 가리지만 이것도 접근 제어는 아닙니다.
