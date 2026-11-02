@@ -36,5 +36,5 @@ jobs:
               /tmp/toss-invest-test/bin/pytest -q
               /tmp/toss-invest-test/bin/ruff check .
               /tmp/toss-invest-test/bin/ruff format --check .
-              /tmp/toss-invest-test/bin/mypy --python-executable /tmp/toss-invest-test/bin/python custom_components/toss_invest
+              /tmp/toss-invest-test/bin/mypy --python-executable "$(command -v python)" custom_components/toss_invest
             '
