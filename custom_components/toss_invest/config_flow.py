@@ -175,7 +175,9 @@ class TossInvestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors["base"] = error
 
         return self.async_show_form(
-            step_id="user", data_schema=_credentials_schema(), errors=errors
+            step_id="user",
+            data_schema=_credentials_schema(),  # type: ignore[arg-type, unused-ignore]
+            errors=errors,
         )
 
     async def async_step_account(
@@ -193,7 +195,7 @@ class TossInvestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 data={**self._credentials, CONF_ACCOUNT_SEQ: account_seq},
             )
 
-        return self.async_show_form(step_id="account", data_schema=_account_schema(self._accounts))
+        return self.async_show_form(step_id="account", data_schema=_account_schema(self._accounts))  # type: ignore[arg-type, unused-ignore]
 
     async def async_step_reauth(
         self, entry_data: Mapping[str, Any]
@@ -233,7 +235,7 @@ class TossInvestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="reauth_confirm",
-            data_schema=_credentials_schema(client_id=reauth_entry.data[CONF_CLIENT_ID]),
+            data_schema=_credentials_schema(client_id=reauth_entry.data[CONF_CLIENT_ID]),  # type: ignore[arg-type, unused-ignore]
             errors=errors,
         )
 
@@ -366,4 +368,4 @@ class TossInvestOptionsFlow(config_entries.OptionsFlow):
                 data[key] = user_input.get(key)
             return self.async_create_entry(data=data)
 
-        return self.async_show_form(step_id="init", data_schema=_options_schema(current))
+        return self.async_show_form(step_id="init", data_schema=_options_schema(current))  # type: ignore[arg-type, unused-ignore]

@@ -165,12 +165,14 @@ def test_ci_workflows_have_expected_gates_and_permissions() -> None:
     for package in (
         "pytest==9.0.3",
         "pytest-asyncio==1.4.0",
-        "pytest-homeassistant-custom-component==0.13.346",
         "aioresponses==0.7.9",
         "ruff==0.15.21",
         "mypy==2.3.0",
     ):
         assert package in compatibility_text
+    # The test plugin pins an exact core, so it must float with the latest stable core.
+    assert "pytest-homeassistant-custom-component \\\n" in compatibility_text
+    assert "pytest-homeassistant-custom-component==" not in compatibility_text
     assert "stable-ha-constraint.txt" in compatibility_text
     assert "--constraint" in compatibility_text
     assert "installed Home Assistant changed during test-tool setup" in compatibility_text
