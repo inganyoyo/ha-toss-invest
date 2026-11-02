@@ -26,7 +26,7 @@ jobs:
               /tmp/toss-invest-test/bin/python -m pip install \
                 --constraint /tmp/stable-ha-constraint.txt \
                 pytest==9.0.3 pytest-asyncio==1.4.0 \
-                pytest-homeassistant-custom-component==0.13.346 \
+                pytest-homeassistant-custom-component \
                 aioresponses==0.7.9 ruff==0.15.21 mypy==2.3.0
               INSTALLED_HA_VERSION="$(/tmp/toss-invest-test/bin/python -c "import importlib.metadata as m; print(m.version(\"homeassistant\"))")"
               if [ "$INSTALLED_HA_VERSION" != "$STABLE_HA_VERSION" ]; then
