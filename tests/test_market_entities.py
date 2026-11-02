@@ -5,9 +5,8 @@ from unittest.mock import AsyncMock, patch
 
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import PERCENTAGE
-from homeassistant.helpers import device_registry as dr, entity_registry as er
+from homeassistant.helpers import entity_registry as er
 
-from custom_components.toss_invest.const import DOMAIN
 from custom_components.toss_invest.coordinator import KOREAN_MARKET_INDICATORS
 from custom_components.toss_invest.market_entities import (
     MARKET_INDICATOR_DESCRIPTIONS,
@@ -17,7 +16,7 @@ from custom_components.toss_invest.market_entities import (
     build_market_entities,
 )
 
-from .test_sensor import api, setup_integration
+from .test_sensor import api, device_by_key, setup_integration
 
 
 def market_api() -> AsyncMock:
@@ -109,9 +108,7 @@ async def test_market_indicators_have_stable_values_defaults_and_device(hass) ->
         else:
             assert registry_entry.disabled_by is er.RegistryEntryDisabler.INTEGRATION
 
-    portfolio = dr.async_get(hass).async_get_device(
-        identifiers={(DOMAIN, f"{entry.entry_id}:portfolio")}
-    )
+    portfolio = device_by_key(hass, entry, "portfolio")
     assert portfolio is not None
     indicator_entry = registry.async_get("sensor.toss_invest_portfolio_market_indicator_kospi")
     assert indicator_entry is not None and indicator_entry.device_id == portfolio.id
@@ -131,9 +128,7 @@ async def test_market_indicators_expose_daily_return_from_candles(hass) -> None:
 async def test_investor_net_uses_latest_record_decimal_and_krw_metadata(hass) -> None:
     entry = await setup_integration(hass, market_api())
     registry = er.async_get(hass)
-    portfolio = dr.async_get(hass).async_get_device(
-        identifiers={(DOMAIN, f"{entry.entry_id}:portfolio")}
-    )
+    portfolio = device_by_key(hass, entry, "portfolio")
     assert portfolio is not None
 
     expected = {
@@ -337,9 +332,7 @@ async def test_ranking_option_reload_registered_state_staleness_and_unload(hass)
     assert state is not None and state.state == "KR-LEADER"
     assert state.attributes["ranked_at"] == "2026-07-13T15:30:00+09:00"
     assert state.attributes["rankings"][0]["last_price"] == "101.25"
-    portfolio = dr.async_get(hass).async_get_device(
-        identifiers={(DOMAIN, f"{entry.entry_id}:portfolio")}
-    )
+    portfolio = device_by_key(hass, entry, "portfolio")
     assert portfolio is not None
     ranking_entry = registry.async_get(entity_id)
     assert ranking_entry is not None and ranking_entry.device_id == portfolio.id
