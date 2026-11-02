@@ -71,7 +71,7 @@ class TossInvestEntity(CoordinatorEntity[TossCoordinator[Any]], Entity):
                 **(
                     {}
                     if _SUPPORTS_VIA_DEVICE_ID
-                    else {"via_device": (DOMAIN, f"{entry_id}:portfolio")}
+                    else {"via_device": (DOMAIN, f"{entry_id}:portfolio")}  # type: ignore[typeddict-unknown-key, unused-ignore]
                 ),
             )
 
@@ -80,7 +80,7 @@ class TossInvestEntity(CoordinatorEntity[TossCoordinator[Any]], Entity):
         """Link holding devices to the portfolio device by registry id."""
         info = self._attr_device_info
         if info is None or self.symbol is None or not _SUPPORTS_VIA_DEVICE_ID:
-            return info
+            return info  # type: ignore[return-value, unused-ignore]
         # Read when the platform registers the device, after `hass` is set. The
         # portfolio device may not exist yet, so get-or-create it (idempotent).
         portfolio = dr.async_get(self.hass).async_get_or_create(
