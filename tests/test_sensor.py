@@ -39,6 +39,24 @@ def api() -> AsyncMock:
     return client
 
 
+def device_by_key(hass, entry: MockConfigEntry, key: str) -> dr.DeviceEntry | None:
+    """Find this entry's device by its identifier key.
+
+    `DeviceRegistry.async_get_device` is deprecated in newer Home Assistant cores, and
+    its replacement does not exist in the minimum supported core, so filter the
+    entry's devices instead.
+    """
+    identifier = (DOMAIN, f"{entry.entry_id}:{key}")
+    return next(
+        (
+            device
+            for device in dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
+            if identifier in device.identifiers
+        ),
+        None,
+    )
+
+
 async def setup_integration(
     hass,
     client: AsyncMock,
@@ -98,12 +116,8 @@ async def test_native_currency_devices_and_disabled_advanced_entities(hass) -> N
     assert advanced is not None
     assert advanced.disabled_by is er.RegistryEntryDisabler.INTEGRATION
 
-    holding_device = dr.async_get(hass).async_get_device(
-        identifiers={(DOMAIN, f"{entry.entry_id}:TEST")}
-    )
-    portfolio_device = dr.async_get(hass).async_get_device(
-        identifiers={(DOMAIN, f"{entry.entry_id}:portfolio")}
-    )
+    holding_device = device_by_key(hass, entry, "TEST")
+    portfolio_device = device_by_key(hass, entry, "portfolio")
     assert holding_device is not None and portfolio_device is not None
     assert holding_device.via_device_id == portfolio_device.id
 
