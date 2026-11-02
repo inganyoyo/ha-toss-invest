@@ -52,11 +52,11 @@ def test_release_documentation_set_exists() -> None:
 def test_readme_documents_install_and_security_boundaries() -> None:
     readme = _text("README.md")
     for phrase in (
-        "read-only",
+        "Read-Only",
         "client_secret",
-        "Privacy mode",
-        "not an authorization boundary",
-        "No order",
+        "Privacy Mode",
+        "권한 분리가 아닙니다",
+        "No Order Endpoint",
         "Custom repositories",
         "configuration.md",
         "privacy.md",
