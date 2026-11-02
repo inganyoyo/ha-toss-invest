@@ -39,5 +39,5 @@ jobs:
               # The image installs Home Assistant in editable mode, which mypy cannot follow.
               HA_SRC="$(python -c "import homeassistant, pathlib; print(pathlib.Path(homeassistant.__file__).resolve().parents[1])")"
               echo "Home Assistant source: $HA_SRC"
-              MYPYPATH="$HA_SRC" /tmp/toss-invest-test/bin/mypy custom_components/toss_invest
+              MYPYPATH="$HA_SRC" /tmp/toss-invest-test/bin/mypy --follow-imports=silent custom_components/toss_invest
             '
