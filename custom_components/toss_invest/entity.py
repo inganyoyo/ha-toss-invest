@@ -7,6 +7,7 @@ from typing import Any
 
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import Entity
@@ -15,6 +16,18 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN
 from .coordinator import TossCoordinator, TossInvestRuntimeData
 from .models import Holding
+
+# Home Assistant 2026.8 added `via_device_id` to DeviceInfo and deprecated the
+# identifier-based `via_device` (removed in 2027.8). Older cores only know the latter.
+_SUPPORTS_VIA_DEVICE_ID = "via_device_id" in DeviceInfo.__annotations__
+
+
+def _portfolio_device_info(entry_id: str) -> DeviceInfo:
+    return DeviceInfo(
+        identifiers={(DOMAIN, f"{entry_id}:portfolio")},
+        name="Toss Invest Portfolio",
+        manufacturer="Toss Securities",
+    )
 
 
 def remove_registry_entries(
@@ -47,12 +60,33 @@ class TossInvestEntity(CoordinatorEntity[TossCoordinator[Any]], Entity):
         self.symbol = holding.symbol if holding else None
         key = self.symbol or "portfolio"
         self._attr_unique_id = f"{entry_id}_{key}_{self.entity_description.key}"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, f"{entry_id}:{key}")},
-            name="Toss Invest Portfolio" if holding is None else holding.name,
-            manufacturer="Toss Securities",
-            **({"via_device": (DOMAIN, f"{entry_id}:portfolio")} if holding is not None else {}),
+        self._entry_id = entry_id
+        if holding is None:
+            self._attr_device_info = _portfolio_device_info(entry_id)
+        else:
+            self._attr_device_info = DeviceInfo(
+                identifiers={(DOMAIN, f"{entry_id}:{key}")},
+                name=holding.name,
+                manufacturer="Toss Securities",
+                **(
+                    {}
+                    if _SUPPORTS_VIA_DEVICE_ID
+                    else {"via_device": (DOMAIN, f"{entry_id}:portfolio")}
+                ),
+            )
+
+    @property
+    def device_info(self) -> DeviceInfo | None:
+        """Link holding devices to the portfolio device by registry id."""
+        info = self._attr_device_info
+        if info is None or self.symbol is None or not _SUPPORTS_VIA_DEVICE_ID:
+            return info
+        # Read when the platform registers the device, after `hass` is set. The
+        # portfolio device may not exist yet, so get-or-create it (idempotent).
+        portfolio = dr.async_get(self.hass).async_get_or_create(
+            config_entry_id=self._entry_id, **_portfolio_device_info(self._entry_id)
         )
+        return DeviceInfo(**info, via_device_id=portfolio.id)  # type: ignore[typeddict-unknown-key,unused-ignore]
 
     @property
     def holding(self) -> Holding | None:
