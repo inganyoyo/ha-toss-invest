@@ -15,12 +15,13 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: Test against latest Home Assistant
         run: |
-          # No version pins here: install the latest test tooling and let
-          # pytest-homeassistant-custom-component pull the newest Home Assistant
-          # it supports. This keeps the resolver happy (a pinned mypy clashed
-          # with phcc's mypy-dev, and a forced homeassistant== constraint fought
-          # phcc's own pin) and needs no bumping on every HA release. mypy is
-          # covered by the pinned-toolchain quality job, so it's omitted here.
+          # Keep the dev tooling pinned to the same versions the other jobs use
+          # so this canary isolates Home Assistant changes (an unpinned ruff just
+          # reports its newest style rules, not a core regression). Only
+          # pytest-homeassistant-custom-component floats, pulling the newest core
+          # it supports. A pinned mypy clashed with phcc's mypy-dev and a forced
+          # homeassistant== constraint fought phcc's own pin, so both are gone;
+          # mypy is covered by the quality job.
           docker run --rm \
             -v "${GITHUB_WORKSPACE}:/work" \
             -w /work \
@@ -28,8 +29,9 @@ jobs:
             bash -ceu '
               python -m venv --system-site-packages /tmp/toss-invest-test
               /tmp/toss-invest-test/bin/python -m pip install --upgrade \
-                pytest pytest-asyncio pytest-homeassistant-custom-component \
-                aioresponses ruff
+                pytest==9.0.3 pytest-asyncio==1.4.0 \
+                pytest-homeassistant-custom-component \
+                aioresponses==0.7.9 ruff==0.15.21
               /tmp/toss-invest-test/bin/python -c "import importlib.metadata as m; print(\"Home Assistant:\", m.version(\"homeassistant\"))"
               /tmp/toss-invest-test/bin/pytest -q
               /tmp/toss-invest-test/bin/ruff check .
