@@ -162,18 +162,24 @@ def test_ci_workflows_have_expected_gates_and_permissions() -> None:
     compatibility_text = _text(".github/workflows/compatibility.yaml")
     assert "schedule:" in compatibility_text and "cron:" in compatibility_text
     assert "ghcr.io/home-assistant/home-assistant:stable" in compatibility_text
+    # Dev tooling stays pinned (same as the other jobs) so the canary isolates
+    # Home Assistant changes; only the test plugin floats with the core. A
+    # pinned mypy and a forced homeassistant== constraint fought phcc, so both
+    # are gone.
+    assert "pip install --upgrade" in compatibility_text
     for package in (
         "pytest==9.0.3",
         "pytest-asyncio==1.4.0",
-        "pytest-homeassistant-custom-component==0.13.346",
         "aioresponses==0.7.9",
         "ruff==0.15.21",
-        "mypy==2.3.0",
     ):
         assert package in compatibility_text
-    assert "stable-ha-constraint.txt" in compatibility_text
-    assert "--constraint" in compatibility_text
-    assert "installed Home Assistant changed during test-tool setup" in compatibility_text
+    assert "pytest-homeassistant-custom-component \\\n" in compatibility_text
+    assert "pytest-homeassistant-custom-component==" not in compatibility_text
+    assert "mypy==2.3.0" not in compatibility_text
+    assert "--constraint" not in compatibility_text
+    for command in ("pytest -q", "ruff check .", "ruff format --check ."):
+        assert command in compatibility_text
 
     release_text = _text(".github/workflows/release.yaml")
     assert 'tags: ["v*"]' in release_text
