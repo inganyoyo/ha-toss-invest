@@ -162,20 +162,14 @@ def test_ci_workflows_have_expected_gates_and_permissions() -> None:
     compatibility_text = _text(".github/workflows/compatibility.yaml")
     assert "schedule:" in compatibility_text and "cron:" in compatibility_text
     assert "ghcr.io/home-assistant/home-assistant:stable" in compatibility_text
-    for package in (
-        "pytest==9.0.3",
-        "pytest-asyncio==1.4.0",
-        "aioresponses==0.7.9",
-        "ruff==0.15.21",
-        "mypy==2.3.0",
-    ):
-        assert package in compatibility_text
-    # The test plugin pins an exact core, so it must float with the latest stable core.
+    # No version pins: install the latest tooling and let the test plugin float
+    # the Home Assistant core, so the canary never fights the resolver or needs
+    # a pin bump on every core release.
+    assert "pip install --upgrade" in compatibility_text
     assert "pytest-homeassistant-custom-component \\\n" in compatibility_text
     assert "pytest-homeassistant-custom-component==" not in compatibility_text
-    assert "stable-ha-constraint.txt" in compatibility_text
-    assert "--constraint" in compatibility_text
-    assert "installed Home Assistant changed during test-tool setup" in compatibility_text
+    for command in ("pytest -q", "ruff check .", "ruff format --check ."):
+        assert command in compatibility_text
 
     release_text = _text(".github/workflows/release.yaml")
     assert 'tags: ["v*"]' in release_text
